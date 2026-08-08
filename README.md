@@ -335,7 +335,7 @@ Os valores são segredos. Não use o prefixo `NEXT_PUBLIC_`, pois isso os enviar
 Em **Project → Settings → Build and Deployment**, use:
 
 ```text
-npm run db:migrate && npm run build
+npm run build
 ```
 
 Esse comando aplica migrations pendentes com `prisma migrate deploy` e depois compila o sistema. Não use `prisma migrate dev` em produção.
@@ -503,7 +503,7 @@ Confira, nesta ordem:
 2. `DATABASE_URL` de produção;
 3. `SESSION_SECRET`;
 4. `SENSITIVE_DATA_KEY`;
-5. Build Command `npm run db:migrate && npm run build`;
+5. Build Command `npm run build` (as migrations já são aplicadas automaticamente antes da compilação);
 6. novo deploy depois de salvar variáveis.
 
 ### O site publicou, mas a administração não abre

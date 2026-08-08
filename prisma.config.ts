@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { defineConfig, env } from "prisma/config";
+import { enforcePostgresCertificateVerification } from "./lib/db/postgres-url";
 
 // O Next.js usa .env.local no desenvolvimento, mas a CLI do Prisma não o
 // carrega automaticamente. Variáveis já definidas pelo ambiente de produção
@@ -16,6 +17,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: env("DATABASE_URL"),
+    url: enforcePostgresCertificateVerification(env("DATABASE_URL")),
   },
 });
