@@ -1,4 +1,4 @@
-const CACHE_NAME = "emile-raduan-shell-v2";
+const CACHE_NAME = "emile-raduan-shell-v3";
 const STATIC_ASSETS = ["/", "/offline", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -17,10 +17,16 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  const isNavigation = event.request.mode === "navigate";
   const sensitive = ["/admin", "/conta", "/agendar", "/agendamento", "/api"].some((prefix) => url.pathname.startsWith(prefix));
 
   if (sensitive) {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/offline")));
+    event.respondWith(
+      fetch(event.request).catch(async () => {
+        if (isNavigation) return (await caches.match("/offline")) ?? Response.error();
+        return Response.error();
+      })
+    );
     return;
   }
 
@@ -34,6 +40,11 @@ self.addEventListener("fetch", (event) => {
         }
         return response;
       })
-      .catch(async () => (await caches.match(event.request)) ?? caches.match("/offline"))
+      .catch(async () => {
+        const cached = await caches.match(event.request);
+        if (cached) return cached;
+        if (isNavigation) return (await caches.match("/offline")) ?? Response.error();
+        return Response.error();
+      })
   );
 });
