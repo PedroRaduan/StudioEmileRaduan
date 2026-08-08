@@ -1,0 +1,16 @@
+import Link from "next/link";
+import { CalendarDays, ChevronRight, Clock3, UserRound } from "lucide-react";
+import { requireClient } from "@/lib/client-auth/session";
+import { formatDate, formatTime } from "@/lib/date-time";
+import { getPrisma } from "@/lib/db/prisma";
+
+const statusLabels: Record<string, string> = { SCHEDULED: "Aguardando confirmação", CONFIRMED: "Confirmado", ARRIVED: "Chegada registrada", IN_SERVICE: "Em atendimento", COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Não compareceu" };
+
+export default async function ClientDashboardPage() {
+  const current = await requireClient();
+  const appointments = await getPrisma().appointment.findMany({ where: { clientId: current.clientId }, include: { service: true }, orderBy: { startsAt: "desc" }, take: 50 });
+  const now = new Date();
+  const upcoming = appointments.filter((item) => item.startsAt >= now && !["CANCELED", "COMPLETED", "NO_SHOW"].includes(item.status)).reverse();
+  const history = appointments.filter((item) => item.startsAt < now || ["CANCELED", "COMPLETED", "NO_SHOW"].includes(item.status));
+  return <><div className="client-page-heading"><div><p className="eyebrow">Sua agenda</p><h1>Meus horários</h1><p>Acompanhe confirmações, orientações e seu histórico no studio.</p></div><Link className="secondary-action" href="/conta/perfil"><UserRound size={17} />Meus dados</Link></div><section className="client-section" aria-labelledby="upcoming-title"><div className="client-section-heading"><h2 id="upcoming-title">Próximos atendimentos</h2><Link href="/agendar">Novo agendamento <ChevronRight size={16} /></Link></div>{upcoming.length ? <div className="client-appointment-list">{upcoming.map((appointment) => <article key={appointment.id}><div className="client-date-tile"><strong>{new Intl.DateTimeFormat("pt-BR", { day: "2-digit", timeZone: "America/Sao_Paulo" }).format(appointment.startsAt)}</strong><span>{new Intl.DateTimeFormat("pt-BR", { month: "short", timeZone: "America/Sao_Paulo" }).format(appointment.startsAt).replace(".", "")}</span></div><div><h3>{appointment.service.name}</h3><p><Clock3 size={15} /> {formatTime(appointment.startsAt)} · {appointment.durationMinutes} min</p><span className={`client-status status-${appointment.status.toLowerCase()}`}>{statusLabels[appointment.status]}</span></div><small>{appointment.code}</small></article>)}</div> : <div className="client-empty"><CalendarDays size={27} /><h3>Nenhum horário marcado.</h3><p>Quando quiser, escolha um serviço e veja a disponibilidade real da agenda.</p><Link className="button button-primary" href="/agendar">Agendar um horário</Link></div>}</section><section className="client-section history-section" aria-labelledby="history-title"><div className="client-section-heading"><h2 id="history-title">Histórico</h2></div>{history.length ? <div className="client-history-list">{history.map((appointment) => <article key={appointment.id}><span>{formatDate(appointment.startsAt)} · {formatTime(appointment.startsAt)}</span><strong>{appointment.service.name}</strong><small>{statusLabels[appointment.status]}</small></article>)}</div> : <p className="muted-copy">Seus atendimentos anteriores aparecerão aqui.</p>}</section></>;
+}

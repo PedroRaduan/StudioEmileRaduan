@@ -1,0 +1,645 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  OWNER
+  RECEPTIONIST
+}
+
+enum ClientStatus {
+  NEW
+  ACTIVE
+  RECURRING
+  INACTIVE
+  BLOCKED
+  FOLLOW_UP_DUE
+  PAYMENT_DUE
+}
+
+enum ContactPreference {
+  WHATSAPP
+  PHONE
+  EMAIL
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  ARRIVED
+  IN_SERVICE
+  COMPLETED
+  CANCELED
+  NO_SHOW
+}
+
+enum PaymentMethod {
+  CASH
+  PIX
+  CARD
+  TRANSFER
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  AWAITING_CONFIRMATION
+  PARTIALLY_PAID
+  PAID
+  REFUNDED
+  CANCELED
+  OVERDUE
+}
+
+enum MessageChannel {
+  WHATSAPP
+  EMAIL
+  PUSH
+}
+
+enum MessageStatus {
+  PREPARED
+  MANUALLY_SENT
+  SENT
+  FAILED
+}
+
+enum ConsentType {
+  PRIVACY
+  COMMUNICATION
+  PHOTO
+  PROCEDURE
+}
+
+enum PrivacyRequestType {
+  EXPORT
+  CORRECTION
+  DELETION
+}
+
+enum PrivacyRequestStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  DECLINED
+}
+
+enum BookingHoldStatus {
+  ACTIVE
+  CONVERTED
+  RELEASED
+  EXPIRED
+}
+
+enum AppointmentActionPurpose {
+  CONFIRM
+  CANCEL
+  RESCHEDULE
+}
+
+enum RecoveryRequestStatus {
+  OPEN
+  CONTACTED
+  RESOLVED
+}
+
+enum AdminAgreementType {
+  TERMS
+  PRIVACY
+  TEMPORARY_ACCESS
+}
+
+model User {
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  name               String
+  passwordHash       String
+  role               UserRole   @default(OWNER)
+  isActive           Boolean    @default(true)
+  isTemporary        Boolean    @default(false)
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean    @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  sessions           Session[]
+  appointments       Appointment[] @relation("AppointmentCreatedBy")
+  appointmentEvents  AppointmentEvent[]
+  paymentsConfirmed  Payment[]  @relation("PaymentConfirmedBy")
+  messagesPrepared   MessageLog[]
+  auditLogs          AuditLog[]
+  agreements         AdminAgreement[]
+}
+
+model AdminAgreement {
+  id          String             @id @default(cuid())
+  userId      String
+  type        AdminAgreementType
+  version     String
+  acceptedAt  DateTime           @default(now())
+  ipHash      String?
+  userAgent   String?
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, acceptedAt])
+}
+
+model Session {
+  id          String   @id @default(cuid())
+  tokenHash   String   @unique
+  userId      String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  ipHash      String?
+  userAgent   String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model LoginAttempt {
+  id             String   @id @default(cuid())
+  identifierHash String
+  ipHash         String?
+  succeeded      Boolean
+  createdAt      DateTime @default(now())
+
+  @@index([identifierHash, createdAt])
+}
+
+model StudioSettings {
+  id                    String   @id @default("studio")
+  studioName            String   @default("Emile Raduan Beauty Face")
+  legalName             String?
+  document              String?
+  logoUrl               String?
+  appIconUrl            String?
+  coverImageUrl         String?
+  primaryColor          String   @default("#9A5B67")
+  secondaryColor        String   @default("#E8D8D3")
+  phone                 String?
+  whatsapp              String?
+  email                 String?
+  instagram             String?
+  addressLine1          String?
+  addressLine2          String?
+  city                  String?
+  state                 String?
+  postalCode            String?
+  mapUrl                String?
+  timezone              String   @default("America/Sao_Paulo")
+  currency              String   @default("BRL")
+  onlineBookingEnabled  Boolean  @default(false)
+  minNoticeHours        Int      @default(0)
+  maxAdvanceDays        Int      @default(90)
+  defaultSlotMinutes    Int      @default(15)
+  bookingHoldMinutes    Int      @default(10)
+  cancellationHours     Int      @default(24)
+  rescheduleHours       Int      @default(24)
+  maxClientReschedules  Int      @default(1)
+  cancellationPolicy    String?
+  reschedulePolicy      String?
+  publicIntro           String?
+  publicAbout           String?
+  updatedAt             DateTime @updatedAt
+}
+
+model ServiceCategory {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  displayOrder Int      @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  services    Service[]
+}
+
+model Service {
+  id                     String    @id @default(cuid())
+  categoryId             String?
+  name                   String    @unique
+  shortDescription       String?
+  fullDescription        String?
+  imageUrl               String?
+  durationMinutes        Int
+  preparationMinutes     Int       @default(0)
+  cleanupMinutes         Int       @default(0)
+  priceCents             Int?
+  promotionalPriceCents  Int?
+  depositRequired        Boolean   @default(false)
+  depositType            String?
+  depositValue           Int?
+  minAdvanceHours        Int       @default(0)
+  maxAdvanceDays         Int       @default(90)
+  cancellationPolicy     String?
+  beforeCare             String?
+  afterCare              String?
+  isOnlineAvailable      Boolean   @default(false)
+  isActive               Boolean   @default(true)
+  displayOrder           Int       @default(0)
+  calendarColor          String    @default("#9A5B67")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  category               ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  appointments           Appointment[]
+  bookingHolds           BookingHold[]
+
+  @@index([isActive, displayOrder])
+}
+
+model Client {
+  id                    String             @id @default(cuid())
+  fullName              String
+  preferredName         String?
+  birthDate             DateTime?          @db.Date
+  phone                 String?
+  whatsapp              String?
+  email                 String?            @unique
+  cpf                   String?            @unique
+  instagram             String?
+  addressLine1          String?
+  addressLine2          String?
+  city                  String?
+  state                 String?
+  postalCode            String?
+  avatarUrl             String?
+  source                String?
+  referralSource        String?
+  contactPreference     ContactPreference  @default(WHATSAPP)
+  status                ClientStatus       @default(NEW)
+  internalNotes         String?
+  returnRecommendedAt   DateTime?
+  firstAppointmentAt    DateTime?
+  lastAppointmentAt     DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  deletedAt             DateTime?
+  appointments          Appointment[]
+  healthProfile         ClientHealthProfile?
+  notes                 ClientNote[]
+  payments              Payment[]
+  messages              MessageLog[]
+  consents              Consent[]
+  privacyRequests       PrivacyRequest[]
+  account               ClientAccount?
+  bookingHolds          BookingHold[]
+  recoveryRequests      ClientRecoveryRequest[]
+
+  @@index([fullName])
+  @@index([phone])
+  @@index([whatsapp])
+  @@index([status, createdAt])
+  @@index([lastAppointmentAt])
+}
+
+model ClientHealthProfile {
+  id                    String   @id @default(cuid())
+  clientId              String   @unique
+  encryptedPayload      String
+  encryptionKeyVersion  Int      @default(1)
+  updatedAt             DateTime @updatedAt
+  client                Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+}
+
+model ClientNote {
+  id          String   @id @default(cuid())
+  clientId    String
+  body        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+model CalendarResource {
+  id          String        @id @default(cuid())
+  name        String
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  appointments Appointment[]
+  blocks      ScheduleBlock[]
+  availabilityRules AvailabilityRule[]
+  availabilityExceptions AvailabilityException[]
+  bookingHolds BookingHold[]
+
+  @@index([isActive])
+}
+
+model Appointment {
+  id                    String            @id @default(cuid())
+  code                  String            @unique
+  requestKey            String?           @unique
+  clientId              String
+  serviceId             String
+  resourceId            String
+  createdByUserId       String?
+  startsAt              DateTime
+  endsAt                DateTime
+  occupiedFrom          DateTime
+  occupiedUntil         DateTime
+  durationMinutes       Int
+  priceCents            Int?
+  paymentStatus         PaymentStatus     @default(PENDING)
+  status                AppointmentStatus @default(SCHEDULED)
+  importantNotes        String?
+  internalNotes         String?
+  cancellationReason    String?
+  cancelledAt           DateTime?
+  completedAt           DateTime?
+  client                Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  service               Service           @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  resource              CalendarResource  @relation(fields: [resourceId], references: [id], onDelete: Restrict)
+  createdBy             User?             @relation("AppointmentCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  events                AppointmentEvent[]
+  payment               Payment?
+  actionTokens          AppointmentActionToken[]
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  @@index([resourceId, startsAt])
+  @@index([clientId, startsAt])
+  @@index([status, startsAt])
+}
+
+model ClientAccount {
+  id            String          @id @default(cuid())
+  clientId      String          @unique
+  email         String          @unique
+  passwordHash  String
+  isActive      Boolean         @default(true)
+  verifiedAt    DateTime?
+  lastLoginAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  client        Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sessions      ClientSession[]
+  resetTokens   ClientPasswordResetToken[]
+
+  @@index([isActive, createdAt])
+}
+
+model ClientPasswordResetToken {
+  id          String        @id @default(cuid())
+  accountId   String
+  tokenHash   String        @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime      @default(now())
+  account     ClientAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+}
+
+model ClientSession {
+  id          String        @id @default(cuid())
+  tokenHash   String        @unique
+  accountId   String
+  expiresAt   DateTime
+  createdAt   DateTime      @default(now())
+  lastSeenAt  DateTime      @default(now())
+  ipHash      String?
+  userAgent   String?
+  account     ClientAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, expiresAt])
+}
+
+model ClientRecoveryRequest {
+  id          String                @id @default(cuid())
+  clientId    String
+  status      RecoveryRequestStatus @default(OPEN)
+  createdAt   DateTime              @default(now())
+  resolvedAt  DateTime?
+  client      Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([clientId, createdAt])
+}
+
+model BookingHold {
+  id              String            @id @default(cuid())
+  tokenHash       String            @unique
+  clientId        String?
+  serviceId       String
+  resourceId      String
+  startsAt        DateTime
+  endsAt          DateTime
+  occupiedFrom    DateTime
+  occupiedUntil   DateTime
+  status          BookingHoldStatus @default(ACTIVE)
+  expiresAt       DateTime
+  convertedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  client          Client?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  service         Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  resource        CalendarResource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId, startsAt])
+  @@index([status, expiresAt])
+}
+
+model AppointmentActionToken {
+  id              String                   @id @default(cuid())
+  appointmentId   String
+  tokenHash       String                   @unique
+  purpose         AppointmentActionPurpose
+  expiresAt       DateTime
+  usedAt          DateTime?
+  createdAt       DateTime                 @default(now())
+  appointment     Appointment              @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId, purpose, expiresAt])
+}
+
+model AppointmentEvent {
+  id              String      @id @default(cuid())
+  appointmentId   String
+  actorUserId     String?
+  type            String
+  channel         String      @default("ADMIN")
+  reason          String?
+  previousValue   Json?
+  nextValue       Json?
+  createdAt       DateTime    @default(now())
+  appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  actor           User?       @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([appointmentId, createdAt])
+}
+
+model AvailabilityRule {
+  id              String   @id @default(cuid())
+  resourceId      String
+  dayOfWeek       Int
+  startsAtMinute  Int
+  endsAtMinute    Int
+  lunchStartsAt   Int?
+  lunchEndsAt     Int?
+  isEnabled       Boolean  @default(true)
+  resource        CalendarResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, dayOfWeek])
+}
+
+model AvailabilityException {
+  id              String   @id @default(cuid())
+  resourceId      String
+  date            DateTime @db.Date
+  startsAtMinute  Int?
+  endsAtMinute    Int?
+  isClosed        Boolean  @default(false)
+  note            String?
+  resource        CalendarResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([resourceId, date])
+}
+
+model ScheduleBlock {
+  id          String           @id @default(cuid())
+  resourceId  String
+  startsAt    DateTime
+  endsAt      DateTime
+  title       String
+  note        String?
+  createdAt   DateTime         @default(now())
+  resource    CalendarResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId, startsAt])
+}
+
+model Holiday {
+  id          String   @id @default(cuid())
+  date        DateTime @unique @db.Date
+  name        String
+  isClosed    Boolean  @default(true)
+}
+
+model Payment {
+  id                 String        @id @default(cuid())
+  appointmentId      String        @unique
+  clientId           String
+  amountDueCents     Int?
+  amountPaidCents    Int           @default(0)
+  depositRequired    Boolean       @default(false)
+  depositAmountCents Int?
+  depositPaidCents   Int           @default(0)
+  method             PaymentMethod?
+  status             PaymentStatus @default(PENDING)
+  receiptUrl         String?
+  note               String?
+  confirmedByUserId  String?
+  confirmedAt        DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  appointment        Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  client             Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  confirmedBy        User?         @relation("PaymentConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  events             PaymentEvent[]
+
+  @@index([clientId, status])
+}
+
+model PaymentEvent {
+  id          String   @id @default(cuid())
+  paymentId   String
+  type        String
+  previousValue Json?
+  nextValue   Json?
+  createdAt   DateTime @default(now())
+  payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, createdAt])
+}
+
+model MessageTemplate {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  channel     MessageChannel @default(WHATSAPP)
+  body        String
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model MessageLog {
+  id              String        @id @default(cuid())
+  clientId        String
+  preparedByUserId String?
+  appointmentId   String?
+  channel         MessageChannel @default(WHATSAPP)
+  status          MessageStatus @default(PREPARED)
+  body            String
+  externalId      String?
+  sentAt          DateTime?
+  createdAt       DateTime      @default(now())
+  client          Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  preparedBy      User?         @relation(fields: [preparedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([clientId, createdAt])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  type        ConsentType
+  title       String
+  version     String
+  body        String
+  isActive    Boolean  @default(true)
+  publishedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  consents    Consent[]
+
+  @@unique([type, version])
+}
+
+model Consent {
+  id          String      @id @default(cuid())
+  clientId    String
+  documentId  String
+  granted     Boolean
+  grantedAt   DateTime    @default(now())
+  ipHash      String?
+  device      String?
+  client      Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  document    Document    @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@index([clientId, grantedAt])
+}
+
+model PrivacyRequest {
+  id          String               @id @default(cuid())
+  clientId    String
+  type        PrivacyRequestType
+  status      PrivacyRequestStatus @default(OPEN)
+  note        String?
+  resolvedAt  DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  client      Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String?
+  before      Json?
+  after       Json?
+  ipHash      String?
+  createdAt   DateTime @default(now())
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([userId, createdAt])
+}

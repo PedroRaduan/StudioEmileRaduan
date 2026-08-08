@@ -1,0 +1,24 @@
+"use client";
+
+import { CalendarSync, MessageCircle, Send, XCircle } from "lucide-react";
+import { useActionState } from "react";
+import { cancelAppointmentAction, markWhatsappSentAction, prepareWhatsappAction, rescheduleAppointmentAction, type AppointmentActionState } from "./actions";
+
+const initialState: AppointmentActionState = {};
+
+export function AppointmentManagement({ appointmentId, date, disabled, time }: { appointmentId: string; date: string; disabled: boolean; time: string }) {
+  const [rescheduleState, rescheduleAction, reschedulePending] = useActionState(rescheduleAppointmentAction, initialState);
+  const [cancelState, cancelAction, cancelPending] = useActionState(cancelAppointmentAction, initialState);
+
+  if (disabled) return <section className="admin-card"><p className="eyebrow">Alterações de agenda</p><p className="muted-copy">Este atendimento já foi concluído ou cancelado e não pode mais ser alterado.</p></section>;
+
+  return <section className="detail-action-grid appointment-change-grid">
+    <article className="admin-card"><p className="eyebrow">Reagendar</p><form action={rescheduleAction} className="editor-form compact-form"><input name="appointmentId" type="hidden" value={appointmentId} /><div className="form-grid two-columns"><div className="field-group"><label htmlFor="reschedule-date">Nova data</label><input defaultValue={date} id="reschedule-date" name="date" required type="date" /></div><div className="field-group"><label htmlFor="reschedule-time">Novo horário</label><input defaultValue={time} id="reschedule-time" name="time" required type="time" /></div><div className="field-group form-wide"><label htmlFor="reschedule-reason">Motivo</label><input id="reschedule-reason" maxLength={500} name="reason" placeholder="Ex.: solicitação da cliente pelo WhatsApp" required /></div></div>{rescheduleState.error ? <p className="form-error" role="alert">{rescheduleState.error}</p> : null}{rescheduleState.success ? <p className="form-success" role="status">{rescheduleState.success}</p> : null}<button className="button button-primary" disabled={reschedulePending} type="submit"><CalendarSync size={17} />{reschedulePending ? "Validando…" : "Validar e reagendar"}</button></form></article>
+    <article className="admin-card danger-card"><p className="eyebrow">Cancelar atendimento</p><p className="muted-copy">O horário será liberado. Pagamentos já recebidos não são estornados automaticamente.</p><form action={cancelAction} className="editor-form compact-form" onSubmit={(event) => { if (!window.confirm("Cancelar este agendamento e liberar o horário?")) event.preventDefault(); }}><input name="appointmentId" type="hidden" value={appointmentId} /><div className="field-group"><label htmlFor="cancellation-reason">Motivo do cancelamento</label><textarea id="cancellation-reason" maxLength={500} name="reason" required /></div>{cancelState.error ? <p className="form-error" role="alert">{cancelState.error}</p> : null}{cancelState.success ? <p className="form-success" role="status">{cancelState.success}</p> : null}<button className="button button-danger" disabled={cancelPending} type="submit"><XCircle size={17} />{cancelPending ? "Cancelando…" : "Cancelar agendamento"}</button></form></article>
+  </section>;
+}
+
+export function WhatsappPanel({ appointmentId, link, messageId, messageStatus }: { appointmentId: string; link: string | null; messageId: string | null; messageStatus: string | null }) {
+  const [state, action, isPending] = useActionState(prepareWhatsappAction, initialState);
+  return <article className="admin-card"><p className="eyebrow">Confirmação por WhatsApp</p><p className="muted-copy">A integração automática ainda não está ativa. Prepare a mensagem, abra o WhatsApp e registre o envio manualmente.</p><form action={action}><input name="appointmentId" type="hidden" value={appointmentId} /><button className="secondary-action" disabled={isPending} type="submit"><MessageCircle size={16} />{isPending ? "Preparando…" : "Preparar nova mensagem"}</button></form>{state.error ? <p className="form-error" role="alert">{state.error}</p> : null}{state.success ? <p className="form-success" role="status">{state.success}</p> : null}{link ? <a className="button button-primary whatsapp-open-button" href={link} rel="noreferrer" target="_blank"><MessageCircle size={17} /> Abrir WhatsApp</a> : null}{messageId && messageStatus === "PREPARED" ? <form action={markWhatsappSentAction}><input name="messageId" type="hidden" value={messageId} /><button className="secondary-action" type="submit"><Send size={16} /> Marcar como enviada</button></form> : null}{messageStatus === "MANUALLY_SENT" ? <p className="manual-status"><Send size={14} /> Última mensagem marcada como enviada manualmente.</p> : null}</article>;
+}

@@ -1,0 +1,33 @@
+import { getPrisma } from "@/lib/db/prisma";
+
+export async function listClients(query?: string) {
+  const search = query?.trim();
+  return getPrisma().client.findMany({
+    where: {
+      deletedAt: null,
+      ...(search ? { OR: [
+        { fullName: { contains: search, mode: "insensitive" } }, { preferredName: { contains: search, mode: "insensitive" } },
+        { phone: { contains: search } }, { whatsapp: { contains: search } }, { email: { contains: search, mode: "insensitive" } }, { cpf: { contains: search } },
+      ] } : {}),
+    },
+    include: { _count: { select: { appointments: true } } },
+    orderBy: [{ lastAppointmentAt: "desc" }, { fullName: "asc" }],
+    take: 100,
+  });
+}
+
+export async function getClientProfile(id: string) {
+  return getPrisma().client.findFirst({
+    where: { id, deletedAt: null },
+    include: {
+      notes: { orderBy: { createdAt: "desc" }, take: 10 },
+      appointments: { include: { service: true, events: { orderBy: { createdAt: "desc" }, take: 8 }, payment: true }, orderBy: { startsAt: "desc" }, take: 25 },
+      messages: { orderBy: { createdAt: "desc" }, take: 10 },
+      healthProfile: true,
+      consents: { include: { document: true }, orderBy: { grantedAt: "desc" }, take: 20 },
+      privacyRequests: { orderBy: { createdAt: "desc" }, take: 10 },
+      account: true,
+      recoveryRequests: { orderBy: { createdAt: "desc" }, take: 5 },
+    },
+  });
+}
