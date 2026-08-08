@@ -34,7 +34,9 @@ export async function createInitialAdminAction(_: InitialSetupFormState, formDat
 
   try {
     userId = await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${INITIAL_SETUP_LOCK_ID})`;
+      // A função retorna `void`, tipo que o adapter-pg do Prisma 7 não
+      // desserializa. O cast preserva o lock transacional e torna o retorno seguro.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${INITIAL_SETUP_LOCK_ID})::text AS "lock"`;
       if (await tx.user.count() > 0) throw new Error("SETUP_ALREADY_COMPLETED");
       const user = await tx.user.create({ data: { name: parsed.data.name, email: parsed.data.email, passwordHash, role: "OWNER", isTemporary: true } });
       await tx.adminAgreement.createMany({ data: [
