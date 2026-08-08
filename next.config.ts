@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const scriptSource = process.env.NODE_ENV === "development" ? "'self' 'unsafe-inline' 'unsafe-eval'" : "'self' 'unsafe-inline'";
-const connectSource = process.env.NODE_ENV === "development" ? "'self' ws: wss:" : "'self'";
+const developmentConnections = process.env.NODE_ENV === "development" ? " ws: wss:" : "";
+const vercelAuthenticationConnection = process.env.VERCEL === "1" ? " https://vercel.com" : "";
+const connectSource = `'self'${developmentConnections}${vercelAuthenticationConnection}`;
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },

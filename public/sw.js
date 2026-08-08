@@ -1,4 +1,4 @@
-const CACHE_NAME = "emile-raduan-shell-v3";
+const CACHE_NAME = "emile-raduan-shell-v4";
 const STATIC_ASSETS = ["/", "/offline", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -17,6 +17,7 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname === "/manifest.webmanifest" || url.pathname === "/sw.js") return;
   const isNavigation = event.request.mode === "navigate";
   const sensitive = ["/admin", "/conta", "/agendar", "/agendamento", "/api"].some((prefix) => url.pathname.startsWith(prefix));
 
