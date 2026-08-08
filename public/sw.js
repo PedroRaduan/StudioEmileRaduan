@@ -1,4 +1,4 @@
-const CACHE_NAME = "emile-raduan-shell-v4";
+const CACHE_NAME = "emile-raduan-shell-v5";
 const STATIC_ASSETS = ["/", "/offline", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {
@@ -21,15 +21,10 @@ self.addEventListener("fetch", (event) => {
   const isNavigation = event.request.mode === "navigate";
   const sensitive = ["/admin", "/conta", "/agendar", "/agendamento", "/api"].some((prefix) => url.pathname.startsWith(prefix));
 
-  if (sensitive) {
-    event.respondWith(
-      fetch(event.request).catch(async () => {
-        if (isNavigation) return (await caches.match("/offline")) ?? Response.error();
-        return Response.error();
-      })
-    );
-    return;
-  }
+  // Rotas autenticadas e dados pessoais sempre usam a rede diretamente.
+  // Isso evita cache de informações sensíveis e mantém compatibilidade com
+  // a proteção de acesso aplicada pela hospedagem antes da aplicação.
+  if (sensitive) return;
 
   event.respondWith(
     fetch(event.request)
