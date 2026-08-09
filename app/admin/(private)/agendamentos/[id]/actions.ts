@@ -9,45 +9,59 @@ import { cancelAppointment, rescheduleAppointment } from "@/lib/agenda/update-ap
 import { SchedulingError } from "@/lib/agenda/create-appointment";
 import { formatDate, formatTime } from "@/lib/date-time";
 import { createAppointmentActionLinks } from "@/lib/client-booking/action-tokens";
+import { CURRENT_STUDIO_ID, STUDIO_BRAND } from "@/lib/studio-config";
 
 export type AppointmentActionState = { error?: string; success?: string };
 
 const statusSchema = z.object({ appointmentId: z.string().cuid(), status: z.enum(["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE", "COMPLETED", "NO_SHOW"]) });
 
-export async function updateAppointmentStatusAction(formData: FormData) {
+export async function updateAppointmentStatusAction(_: AppointmentActionState, formData: FormData): Promise<AppointmentActionState> {
   await assertSameOrigin();
   const staff = await requirePermission("APPOINTMENTS_MANAGE");
-  const parsed = statusSchema.parse(Object.fromEntries(formData));
+  const parsed = statusSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Selecione um status válido." };
   const prisma = getPrisma();
-  const appointment = await prisma.appointment.findUnique({ where: { id: parsed.appointmentId } });
-  if (!appointment) throw new Error("Agendamento não encontrado.");
+  const appointment = await prisma.appointment.findUnique({ where: { id: parsed.data.appointmentId } });
+  if (!appointment) return { error: "Agendamento não encontrado." };
+  if (appointment.status === "CANCELED") return { error: "Um atendimento cancelado não pode ter o status alterado." };
+  if (appointment.status === parsed.data.status) return { success: "O status já estava atualizado." };
   await prisma.$transaction([
-    prisma.appointment.update({ where: { id: appointment.id }, data: { status: parsed.status, completedAt: parsed.status === "COMPLETED" ? new Date() : null } }),
-    ...(parsed.status === "COMPLETED" ? [prisma.client.update({ where: { id: appointment.clientId }, data: { lastAppointmentAt: new Date(), status: "ACTIVE" } })] : []),
-    prisma.appointmentEvent.create({ data: { appointmentId: appointment.id, actorUserId: staff.id, type: "STATUS_CHANGED", previousValue: { status: appointment.status }, nextValue: { status: parsed.status } } }),
-    prisma.auditLog.create({ data: { userId: staff.id, action: "APPOINTMENT_STATUS_CHANGED", entityType: "Appointment", entityId: appointment.id, before: { status: appointment.status }, after: { status: parsed.status } } }),
+    prisma.appointment.update({ where: { id: appointment.id }, data: { status: parsed.data.status, completedAt: parsed.data.status === "COMPLETED" ? new Date() : null } }),
+    ...(parsed.data.status === "COMPLETED" ? [prisma.client.update({ where: { id: appointment.clientId }, data: { lastAppointmentAt: new Date(), status: "ACTIVE" } })] : []),
+    prisma.appointmentEvent.create({ data: { appointmentId: appointment.id, actorUserId: staff.id, type: "STATUS_CHANGED", previousValue: { status: appointment.status }, nextValue: { status: parsed.data.status } } }),
+    prisma.auditLog.create({ data: { userId: staff.id, action: "APPOINTMENT_STATUS_CHANGED", entityType: "Appointment", entityId: appointment.id, before: { status: appointment.status }, after: { status: parsed.data.status } } }),
   ]);
   refreshAppointment(appointment.id);
+  return { success: "Status atualizado." };
 }
 
-const paymentSchema = z.object({ appointmentId: z.string().cuid(), amount: z.string().min(1), method: z.enum(["CASH", "PIX", "CARD", "TRANSFER"]) });
+const paymentSchema = z.object({
+  appointmentId: z.string().cuid(),
+  amount: z.string().trim().min(1).max(30),
+  method: z.enum(["CASH", "PIX", "CARD", "TRANSFER"]),
+});
 
-export async function recordPaymentAction(formData: FormData) {
+export async function recordPaymentAction(_: AppointmentActionState, formData: FormData): Promise<AppointmentActionState> {
   await assertSameOrigin();
   const staff = await requirePermission("PAYMENTS_RECORD");
-  const parsed = paymentSchema.parse(Object.fromEntries(formData));
-  const amount = Math.round(Number(parsed.amount.replace(/\./g, "").replace(",", ".")) * 100);
-  if (!Number.isInteger(amount) || amount < 0) throw new Error("Valor inválido.");
+  const parsed = paymentSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Informe um valor e uma forma de pagamento válidos." };
+  const amount = Math.round(Number(parsed.data.amount.replace(/\./g, "").replace(",", ".")) * 100);
+  if (!Number.isInteger(amount) || amount < 0 || amount > 100_000_000) return { error: "Informe um valor válido." };
   const prisma = getPrisma();
-  const appointment = await prisma.appointment.findUnique({ where: { id: parsed.appointmentId }, include: { payment: true } });
-  if (!appointment?.payment) throw new Error("Pagamento não encontrado.");
+  const appointment = await prisma.appointment.findUnique({ where: { id: parsed.data.appointmentId }, include: { payment: true } });
+  if (!appointment?.payment) return { error: "Pagamento não encontrado." };
+  if (appointment.payment.amountDueCents !== null && amount > appointment.payment.amountDueCents) {
+    return { error: "O valor recebido não pode ser maior que o valor previsto." };
+  }
   const status = appointment.payment.amountDueCents !== null && amount < appointment.payment.amountDueCents ? "PARTIALLY_PAID" : "PAID";
   await prisma.$transaction([
-    prisma.payment.update({ where: { id: appointment.payment.id }, data: { amountPaidCents: amount, depositPaidCents: appointment.payment.depositAmountCents ? Math.min(amount, appointment.payment.depositAmountCents) : 0, method: parsed.method, status, confirmedByUserId: staff.id, confirmedAt: new Date(), events: { create: { type: "MANUALLY_RECORDED", previousValue: { amount: appointment.payment.amountPaidCents, status: appointment.payment.status }, nextValue: { amount, method: parsed.method, status } } } } }),
+    prisma.payment.update({ where: { id: appointment.payment.id }, data: { amountPaidCents: amount, depositPaidCents: appointment.payment.depositAmountCents ? Math.min(amount, appointment.payment.depositAmountCents) : 0, method: parsed.data.method, status, confirmedByUserId: staff.id, confirmedAt: new Date(), events: { create: { type: "MANUALLY_RECORDED", previousValue: { amount: appointment.payment.amountPaidCents, status: appointment.payment.status }, nextValue: { amount, method: parsed.data.method, status } } } } }),
     prisma.appointment.update({ where: { id: appointment.id }, data: { paymentStatus: status } }),
-    prisma.auditLog.create({ data: { userId: staff.id, action: "PAYMENT_RECORDED", entityType: "Payment", entityId: appointment.payment.id, before: { amount: appointment.payment.amountPaidCents, status: appointment.payment.status }, after: { amount, method: parsed.method, status } } }),
+    prisma.auditLog.create({ data: { userId: staff.id, action: "PAYMENT_RECORDED", entityType: "Payment", entityId: appointment.payment.id, before: { amount: appointment.payment.amountPaidCents, status: appointment.payment.status }, after: { amount, method: parsed.data.method, status } } }),
   ]);
   refreshAppointment(appointment.id);
+  return { success: "Pagamento registrado." };
 }
 
 const rescheduleSchema = z.object({
@@ -96,7 +110,7 @@ export async function prepareWhatsappAction(_: AppointmentActionState, formData:
   const [appointment, template, settings] = await Promise.all([
     prisma.appointment.findUnique({ where: { id: appointmentId.data }, include: { client: true, service: true } }),
     prisma.messageTemplate.findFirst({ where: { channel: "WHATSAPP", isActive: true, name: { contains: "confirma", mode: "insensitive" } }, orderBy: { updatedAt: "desc" } }),
-    prisma.studioSettings.findUnique({ where: { id: "studio" } }),
+    prisma.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } }),
   ]);
   if (!appointment?.client.whatsapp) return { error: "Cadastre o WhatsApp da cliente antes de preparar a mensagem." };
   const fallback = "Olá, {nome}. Seu horário para {servico} está marcado para {data}, às {horario}.";
@@ -111,7 +125,7 @@ export async function prepareWhatsappAction(_: AppointmentActionState, formData:
     .replaceAll("{servico}", appointment.service.name)
     .replaceAll("{data}", formatDate(appointment.startsAt, { day: "2-digit", month: "long" }))
     .replaceAll("{horario}", formatTime(appointment.startsAt))
-    .replaceAll("{studio}", settings?.studioName ?? "Emile Raduan Beauty Face")
+    .replaceAll("{studio}", settings?.studioName ?? STUDIO_BRAND.name)
     .replaceAll("{link_confirmar}", links?.CONFIRM ?? "")
     .replaceAll("{link_cancelar}", links?.CANCEL ?? "")
     .replaceAll("{link_reagendar}", links?.RESCHEDULE ?? "");

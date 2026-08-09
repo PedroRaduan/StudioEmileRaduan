@@ -2,10 +2,27 @@
 
 import { FileCheck2, KeyRound, Save, ShieldCheck } from "lucide-react";
 import { useActionState } from "react";
-import { addClientNoteAction, createPrivacyRequestAction, prepareClientAccessAction, recordConsentAction, saveHealthProfileAction, type ClientProfileState } from "./actions";
+import { addClientNoteAction, createPrivacyRequestAction, prepareClientAccessAction, recordConsentAction, saveHealthProfileAction, updateClientDetailsAction, type ClientProfileState } from "./actions";
 import type { SensitiveClientData } from "@/lib/security/sensitive-data";
 
 const initialState: ClientProfileState = {};
+
+type EditableClient = {
+  id: string;
+  fullName: string;
+  preferredName: string | null;
+  whatsapp: string | null;
+  phone: string | null;
+  email: string | null;
+  birthDate: Date | null;
+  city: string | null;
+  state: string | null;
+};
+
+export function ClientDetailsForm({ client }: { client: EditableClient }) {
+  const [state, action, pending] = useActionState(updateClientDetailsAction, initialState);
+  return <details className="client-edit-details"><summary>Editar dados da cliente</summary><form action={action} className="editor-form compact-form"><input name="clientId" type="hidden" value={client.id} /><div className="form-grid two-columns"><div className="field-group"><label htmlFor="edit-full-name">Nome completo</label><input defaultValue={client.fullName} id="edit-full-name" maxLength={150} name="fullName" required /></div><div className="field-group"><label htmlFor="edit-preferred-name">Como prefere ser chamada <span>opcional</span></label><input defaultValue={client.preferredName ?? ""} id="edit-preferred-name" maxLength={150} name="preferredName" /></div><div className="field-group"><label htmlFor="edit-whatsapp">WhatsApp <span>opcional</span></label><input autoComplete="tel" defaultValue={client.whatsapp ?? ""} id="edit-whatsapp" maxLength={30} name="whatsapp" /></div><div className="field-group"><label htmlFor="edit-phone">Telefone <span>opcional</span></label><input autoComplete="tel" defaultValue={client.phone ?? ""} id="edit-phone" maxLength={30} name="phone" /></div><div className="field-group"><label htmlFor="edit-email">E-mail <span>opcional</span></label><input autoComplete="email" defaultValue={client.email ?? ""} id="edit-email" maxLength={254} name="email" type="email" /></div><div className="field-group"><label htmlFor="edit-birth-date">Nascimento <span>opcional</span></label><input defaultValue={client.birthDate?.toISOString().slice(0, 10) ?? ""} id="edit-birth-date" name="birthDate" type="date" /></div><div className="field-group"><label htmlFor="edit-city">Cidade <span>opcional</span></label><input defaultValue={client.city ?? ""} id="edit-city" maxLength={250} name="city" /></div><div className="field-group"><label htmlFor="edit-state">Estado <span>opcional</span></label><input defaultValue={client.state ?? ""} id="edit-state" maxLength={250} name="state" /></div></div>{state.error ? <p className="form-error" role="alert">{state.error}</p> : null}{state.success ? <p className="form-success" role="status">{state.success}</p> : null}<button className="secondary-action" disabled={pending} type="submit"><Save size={16} />{pending ? "Salvando…" : "Salvar dados"}</button></form></details>;
+}
 
 export function ClientNoteForm({ clientId }: { clientId: string }) {
   const [state, action, pending] = useActionState(addClientNoteAction, initialState);

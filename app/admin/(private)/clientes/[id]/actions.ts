@@ -12,6 +12,43 @@ import { encryptSensitiveData } from "@/lib/security/sensitive-data";
 
 export type ClientProfileState = { error?: string; success?: string; link?: string };
 
+const clientDetailsSchema = z.object({
+  clientId: z.string().cuid(),
+  fullName: z.string().trim().min(2, "Informe o nome completo.").max(150),
+  preferredName: z.string().trim().max(150).optional().transform((value) => value || null),
+  whatsapp: z.string().trim().max(30).optional().transform((value) => value || null),
+  phone: z.string().trim().max(30).optional().transform((value) => value || null),
+  email: z.union([z.literal(""), z.string().trim().email("Informe um e-mail válido.").max(254)]).transform((value) => value || null),
+  birthDate: z.union([z.literal(""), z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data válida.")]).transform((value) => value || null),
+  city: z.string().trim().max(250).optional().transform((value) => value || null),
+  state: z.string().trim().max(250).optional().transform((value) => value || null),
+});
+
+export async function updateClientDetailsAction(_: ClientProfileState, formData: FormData): Promise<ClientProfileState> {
+  await assertSameOrigin();
+  const staff = await requirePermission("CLIENTS_MANAGE");
+  const parsed = clientDetailsSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise os dados da cliente." };
+  const { clientId, birthDate, email, ...details } = parsed.data;
+  const prisma = getPrisma();
+  const before = await prisma.client.findFirst({ where: { id: clientId, deletedAt: null }, include: { account: { select: { id: true } } } });
+  if (!before) return { error: "Cliente não encontrada." };
+  const normalizedEmail = email?.toLowerCase() ?? null;
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.client.update({ where: { id: clientId }, data: { ...details, email: normalizedEmail, birthDate: birthDate ? new Date(`${birthDate}T12:00:00Z`) : null } });
+      if (before.account && normalizedEmail) await tx.clientAccount.update({ where: { id: before.account.id }, data: { email: normalizedEmail } });
+      await tx.auditLog.create({ data: { userId: staff.id, action: "CLIENT_UPDATED", entityType: "Client", entityId: clientId, before: { fullName: before.fullName, preferredName: before.preferredName, whatsapp: before.whatsapp, phone: before.phone, email: before.email, city: before.city, state: before.state }, after: { ...details, email: normalizedEmail, birthDate } } });
+    });
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && String(error.code) === "P2002") return { error: "Este e-mail já está vinculado a outro cadastro." };
+    return { error: "Não foi possível atualizar a cliente. Tente novamente." };
+  }
+  revalidatePath(`/admin/clientes/${clientId}`);
+  revalidatePath("/admin/clientes");
+  return { success: "Dados da cliente atualizados." };
+}
+
 export async function prepareClientAccessAction(_: ClientProfileState, formData: FormData): Promise<ClientProfileState> {
   await assertSameOrigin();
   const owner = await requireOwner();

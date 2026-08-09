@@ -1,6 +1,8 @@
 # Emile Raduan Beauty Face
 
-Sistema de agenda e gestão para um único studio. O projeto possui página pública, agenda administrativa, cadastro de clientes, serviços, disponibilidade, pagamentos manuais, relatórios, permissões e PWA instalável.
+Sistema de agenda e gestão para um único studio. O projeto possui página pública, agenda administrativa, cadastro de clientes, serviços, disponibilidade, pagamentos manuais, relatórios, permissões e um PWA exclusivo para a administração.
+
+Documentação técnica: [arquitetura, PWA e segurança](docs/visao-tecnica.md). Planejamento de longo prazo, sem funcionalidades SaaS ativas: [roadmap futuro](SAAS_FUTURE_ROADMAP.md).
 
 Este guia foi escrito para quem está começando. Siga as etapas na ordem e não pule a configuração do banco ou das variáveis de segurança.
 
@@ -17,7 +19,7 @@ Este guia foi escrito para quem está começando. Siga as etapas na ordem e não
 - Relatórios operacionais e financeiros.
 - Controle de permissões para administradora e recepcionista.
 - Conta separada para clientes e autoagendamento opcional.
-- PWA instalável, tela sem conexão e cache de conteúdo não sensível.
+- PWA administrativo instalável, tela sem conexão e cache restrito a arquivos estáticos não sensíveis.
 - Auditoria, termos versionados e solicitações relacionadas à LGPD.
 
 ## O que ainda precisa ser feito antes do uso real
@@ -380,7 +382,7 @@ Não coloque a connection string de produção no `.env.local` apenas para execu
 2. informe nome, e-mail e uma senha forte;
 3. aceite os documentos apresentados;
 4. entre no painel;
-5. se a interface indicar que o acesso inicial é provisório, abra **Configurações → Acesso administrativo** e torne-o definitivo;
+5. confirme que consegue sair e entrar novamente com a conta criada;
 6. não compartilhe essa conta com recepcionistas; crie acessos separados quando necessário.
 
 ### 8. Feche a configuração inicial
@@ -436,6 +438,8 @@ Uma estratégia de backup só é válida quando a restauração já foi testada.
 
 ## Parte 7 — Instalar como aplicativo no celular
 
+Entre primeiro em `/admin/login`. O aviso de instalação aparece somente dentro da área administrativa, pois páginas públicas e páginas de cliente não pertencem ao PWA. Depois de instalado, o ícone abre `/admin`; se a sessão tiver terminado, o sistema solicita o login normalmente.
+
 ### Android
 
 1. Abra o site publicado no Chrome;
@@ -451,6 +455,8 @@ Uma estratégia de backup só é válida quando a restauração já foi testada.
 4. confirme o nome e toque em **Adicionar**.
 
 O site publicado pelo Vercel já utiliza HTTPS, requisito necessário para a PWA.
+
+Sem internet, o aplicativo mostra apenas uma página de orientação. Agenda, clientes, pagamentos e outras informações administrativas nunca são disponibilizados pelo cache offline.
 
 ---
 

@@ -10,7 +10,8 @@ export const metadata: Metadata = { title: "Acesso administrativo", robots: { in
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminLoginPage() {
+export default async function AdminLoginPage({ searchParams }: { searchParams: Promise<{ reason?: string }> }) {
+  const params = await searchParams;
   const setupState = await getAdminSetupState();
   if (setupState === "needs_setup") redirect("/admin/configuracao-inicial");
   if (setupState === "ready" && await getCurrentUser()) redirect("/admin");
@@ -25,6 +26,7 @@ export default async function AdminLoginPage() {
           <h1 id="login-title">Sua agenda, sob seu controle.</h1>
           <p>Entre para gerenciar horários, clientes e atendimentos.</p>
         </div>
+        {params.reason === "session-expired" ? <p className="session-notice" role="status">Sua sessão expirou. Entre novamente para continuar com segurança.</p> : null}
         {setupState === "unavailable" ? <p className="form-error" role="alert">O banco de dados ainda não está conectado. A configuração inicial ficará disponível assim que a conexão segura for informada.</p> : <LoginForm />}
       </section>
       <aside className="login-aside" aria-hidden="true">

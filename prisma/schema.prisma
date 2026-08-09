@@ -171,6 +171,7 @@ model LoginAttempt {
   createdAt      DateTime @default(now())
 
   @@index([identifierHash, createdAt])
+  @@index([ipHash, createdAt])
 }
 
 model StudioSettings {

@@ -12,7 +12,7 @@ describe("configuração inicial administrativa", () => {
   });
 
   it("exige confirmação igual e todos os aceites", () => {
-    const base = { name: "Emile Raduan", email: "emile@example.com", password: "Agenda#Segura2026", confirmPassword: "outra", termsAccepted: "on", privacyAccepted: "on", temporaryAccepted: "on" };
+    const base = { name: "Emile Raduan", email: "emile@example.com", password: "Agenda#Segura2026", confirmPassword: "outra", termsAccepted: "on", privacyAccepted: "on" };
     expect(initialAdminSchema.safeParse(base).success).toBe(false);
     expect(initialAdminSchema.safeParse({ ...base, confirmPassword: base.password, privacyAccepted: "" }).success).toBe(false);
     expect(initialAdminSchema.safeParse({ ...base, confirmPassword: base.password }).success).toBe(true);

@@ -1,9 +1,10 @@
 import { getPrisma } from "@/lib/db/prisma";
+import { CURRENT_STUDIO_ID, STUDIO_BRAND } from "@/lib/studio-config";
 
 const fallback = {
-  studioName: "Emile Raduan Beauty Face",
-  primaryColor: "#9A5B67",
-  secondaryColor: "#E8D8D3",
+  studioName: STUDIO_BRAND.name,
+  primaryColor: STUDIO_BRAND.primaryColor,
+  secondaryColor: STUDIO_BRAND.secondaryColor,
   publicIntro: null,
   publicAbout: null,
   whatsapp: null,
@@ -20,7 +21,7 @@ export async function getPublicStudio() {
   try {
     const prisma = getPrisma();
     const [settings, services] = await Promise.all([
-      prisma.studioSettings.findUnique({ where: { id: "studio" } }),
+      prisma.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } }),
       prisma.service.findMany({
         where: { isActive: true, isOnlineAvailable: true },
         select: { id: true, name: true, shortDescription: true, durationMinutes: true, priceCents: true },

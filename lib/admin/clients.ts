@@ -1,6 +1,9 @@
+import "server-only";
 import { getPrisma } from "@/lib/db/prisma";
+import { requirePermission } from "@/lib/auth/session";
 
 export async function listClients(query?: string) {
+  await requirePermission("CLIENTS_MANAGE");
   const search = query?.trim();
   return getPrisma().client.findMany({
     where: {
@@ -17,6 +20,7 @@ export async function listClients(query?: string) {
 }
 
 export async function getClientProfile(id: string) {
+  await requirePermission("CLIENTS_MANAGE");
   return getPrisma().client.findFirst({
     where: { id, deletedAt: null },
     include: {

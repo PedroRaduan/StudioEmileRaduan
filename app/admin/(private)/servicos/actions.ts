@@ -51,10 +51,12 @@ export async function createServiceAction(_: ServiceFormState, formData: FormDat
   await assertSameOrigin(); const owner = await requirePermission("SERVICES_MANAGE");
   const result = serviceData(formData); if ("error" in result) return result;
   try {
-    const service = await getPrisma().service.create({ data: result.data });
-    await getPrisma().auditLog.create({ data: { userId: owner.id, action: "SERVICE_CREATED", entityType: "Service", entityId: service.id, after: { name: service.name } } });
-    refreshServices(); redirect("/admin/servicos");
+    await getPrisma().$transaction(async (tx) => {
+      const service = await tx.service.create({ data: result.data });
+      await tx.auditLog.create({ data: { userId: owner.id, action: "SERVICE_CREATED", entityType: "Service", entityId: service.id, after: { name: service.name } } });
+    });
   } catch (error) { return { error: isUniqueError(error) ? "Já existe um serviço com este nome." : "Não foi possível salvar o serviço." }; }
+  refreshServices(); redirect("/admin/servicos");
 }
 
 export async function updateServiceAction(_: ServiceFormState, formData: FormData): Promise<ServiceFormState> {
@@ -69,8 +71,8 @@ export async function updateServiceAction(_: ServiceFormState, formData: FormDat
       getPrisma().service.update({ where: { id: before.id }, data: result.data }),
       getPrisma().auditLog.create({ data: { userId: owner.id, action: "SERVICE_UPDATED", entityType: "Service", entityId: before.id, before: { name: before.name, durationMinutes: before.durationMinutes, priceCents: before.priceCents }, after: { name: result.data.name, durationMinutes: result.data.durationMinutes, priceCents: result.data.priceCents } } }),
     ]);
-    refreshServices(); redirect("/admin/servicos");
   } catch (error) { return { error: isUniqueError(error) ? "Já existe um serviço com este nome." : "Não foi possível atualizar o serviço." }; }
+  refreshServices(); redirect("/admin/servicos");
 }
 
 function refreshServices() { revalidatePath("/admin/servicos"); revalidatePath("/admin/agendamentos/novo"); revalidatePath("/"); }

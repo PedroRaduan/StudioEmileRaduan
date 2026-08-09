@@ -14,9 +14,8 @@ export function InitialSetupForm() {
     <div className="setup-agreements">
       <label className="check-field"><input name="termsAccepted" required type="checkbox" /><span>Li e aceito os <a href="#termos-administracao">termos de administração</a>.</span></label>
       <label className="check-field"><input name="privacyAccepted" required type="checkbox" /><span>Li e aceito o <a href="#aviso-privacidade">aviso de privacidade</a>.</span></label>
-      <label className="check-field"><input name="temporaryAccepted" required type="checkbox" /><span>Entendo que este acesso é temporário e poderá ser tornado definitivo ou removido depois.</span></label>
     </div>
     {state.error ? <p className="form-error" role="alert">{state.error}</p> : null}
-    <button className="button button-primary login-submit" disabled={pending} type="submit"><KeyRound size={18} />{pending ? "Protegendo seu acesso…" : "Criar acesso temporário"}</button>
+    <button className="button button-primary login-submit" disabled={pending} type="submit"><KeyRound aria-hidden="true" size={18} />{pending ? "Protegendo seu acesso…" : "Criar acesso administrativo"}</button>
   </form>;
 }

@@ -1,7 +1,10 @@
+import "server-only";
 import { getPrisma } from "@/lib/db/prisma";
 import { localDayRange } from "@/lib/date-time";
+import { requirePermission } from "@/lib/auth/session";
 
 export async function getAgendaForDay(date: string) {
+  await requirePermission("APPOINTMENTS_MANAGE");
   const prisma = getPrisma();
   const range = localDayRange(date);
   const [appointments, blocks, resources] = await Promise.all([
@@ -17,6 +20,7 @@ export async function getAgendaForDay(date: string) {
 }
 
 export async function getAgendaForRange(startDate: string, endDate: string) {
+  await requirePermission("APPOINTMENTS_MANAGE");
   const prisma = getPrisma();
   const start = localDayRange(startDate).start;
   const end = localDayRange(endDate).end;
@@ -28,6 +32,7 @@ export async function getAgendaForRange(startDate: string, endDate: string) {
 }
 
 export async function getAppointmentFormData() {
+  await requirePermission("APPOINTMENTS_MANAGE");
   const prisma = getPrisma();
   const [clients, services, resources] = await Promise.all([
     prisma.client.findMany({ where: { deletedAt: null, status: { not: "BLOCKED" } }, select: { id: true, fullName: true, preferredName: true }, orderBy: { fullName: "asc" }, take: 250 }),
@@ -38,6 +43,7 @@ export async function getAppointmentFormData() {
 }
 
 export async function getAppointment(id: string) {
+  await requirePermission("APPOINTMENTS_MANAGE");
   const prisma = getPrisma();
   const [appointment, messageLogs] = await Promise.all([prisma.appointment.findUnique({
     where: { id },

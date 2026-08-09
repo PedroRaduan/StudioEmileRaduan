@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { assertSameOrigin, createSession, hashIp } from "@/lib/auth/session";
 import { verifyPassword } from "@/lib/auth/password";
+import { isAuthRateLimited, recordAuthAttempt } from "@/lib/auth/rate-limit";
 import { getAdminSetupState } from "@/lib/auth/initial-setup";
 import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
@@ -29,29 +30,24 @@ export async function loginAction(_: LoginState, formData: FormData): Promise<Lo
 
   const email = parsed.data.email.toLowerCase();
   const identifierHash = sha256(email);
+  const requestHeaders = await headers();
+  const ipHash = hashIp(requestHeaders.get("x-forwarded-for") ?? requestHeaders.get("x-real-ip"));
   const prisma = getPrisma();
-  const cutoff = new Date(Date.now() - 10 * 60 * 1000);
-  const failedAttempts = await prisma.loginAttempt.count({
-    where: { identifierHash, succeeded: false, createdAt: { gt: cutoff } },
-  });
-
-  if (failedAttempts >= 5) {
+  if (await isAuthRateLimited({ identifierHash, ipHash })) {
     return { error: "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente." };
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
-  const isValid = Boolean(user?.isActive && user && await verifyPassword(user.passwordHash, parsed.data.password));
-  const requestHeaders = await headers();
+  const passwordMatches = await verifyPassword(user?.passwordHash, parsed.data.password);
+  const isValid = Boolean(user?.isActive && passwordMatches);
 
-  await prisma.loginAttempt.create({
-    data: { identifierHash, ipHash: hashIp(requestHeaders.get("x-forwarded-for")), succeeded: isValid },
-  });
+  await recordAuthAttempt(identifierHash, ipHash, isValid);
 
   if (!isValid || !user) return { error: "E-mail ou senha incorretos." };
 
   await prisma.$transaction([
     prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }),
-    prisma.auditLog.create({ data: { userId: user.id, action: "ADMIN_LOGIN", entityType: "User", entityId: user.id, ipHash: hashIp(requestHeaders.get("x-forwarded-for")) } }),
+    prisma.auditLog.create({ data: { userId: user.id, action: "ADMIN_LOGIN", entityType: "User", entityId: user.id, ipHash } }),
   ]);
   await createSession(user.id);
   redirect("/admin");

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isInsideWorkingHours, occupiedWindow, overlaps } from "../lib/agenda/rules";
+import { isSchedulingConflictError } from "../lib/agenda/conflict-error";
 
 describe("regras de agenda", () => {
   it("inclui preparo e intervalo no período ocupado", () => {
@@ -24,5 +25,10 @@ describe("regras de agenda", () => {
     const rule = { startsAtMinute: 540, endsAtMinute: 1080, lunchStartsAt: 720, lunchEndsAt: 780 };
     expect(isInsideWorkingHours(660, 720, rule)).toBe(true);
     expect(isInsideWorkingHours(690, 750, rule)).toBe(false);
+  });
+
+  it("reconhece a exclusão de intervalo retornada pelo adapter do PostgreSQL", () => {
+    expect(isSchedulingConflictError({ code: "P2039", meta: { driverAdapterError: { cause: { originalCode: "23P01" } } } })).toBe(true);
+    expect(isSchedulingConflictError({ code: "P2039", meta: { driverAdapterError: { cause: { originalCode: "22001" } } } })).toBe(false);
   });
 });

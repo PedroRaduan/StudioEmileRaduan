@@ -1,7 +1,10 @@
+import "server-only";
 import { getPrisma } from "@/lib/db/prisma";
 import { localDayRange, todayInTimezone } from "@/lib/date-time";
+import { requireStaff } from "@/lib/auth/session";
 
 export async function getDashboardData() {
+  await requireStaff();
   const prisma = getPrisma();
   const today = todayInTimezone();
   const range = localDayRange(today);

@@ -19,11 +19,13 @@ export async function createAppointmentAction(_: AppointmentFormState, formData:
   const owner = await requirePermission("APPOINTMENTS_MANAGE");
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Revise os dados obrigatórios do agendamento." };
+  let appointmentId: string;
   try {
     const appointment = await createAppointment({ ...parsed.data, ownerId: owner.id });
-    revalidatePath("/admin"); revalidatePath("/admin/agenda"); revalidatePath("/admin/clientes");
-    redirect(`/admin/agenda?date=${parsed.data.date}&saved=${appointment.id}`);
+    appointmentId = appointment.id;
   } catch (error) {
     return { error: error instanceof SchedulingError ? error.message : "Não foi possível salvar o agendamento. Tente novamente." };
   }
+  revalidatePath("/admin"); revalidatePath("/admin/agenda"); revalidatePath("/admin/clientes");
+  redirect(`/admin/agenda?date=${parsed.data.date}&saved=${appointmentId}`);
 }

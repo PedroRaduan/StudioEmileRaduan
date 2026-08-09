@@ -13,4 +13,6 @@
 
 Dados de saúde ou restrições são relatos da cliente e não representam diagnóstico médico. Não copie senhas, tokens ou dados sensíveis para observações comuns.
 
-Instale a PWA pelo aviso exibido no navegador do celular. Em dispositivos compartilhados, sempre encerre a sessão.
+Instale a PWA pelo aviso exibido depois de entrar na administração. O ícone instalado abre diretamente a área administrativa, mas nunca dispensa o login. No celular, use a barra inferior para abrir Agenda, Novo agendamento e Clientes com um toque.
+
+Sem internet, nenhuma agenda ou ficha de cliente fica disponível no aparelho: aparece somente uma orientação para reconectar. Em dispositivos compartilhados, sempre encerre a sessão.

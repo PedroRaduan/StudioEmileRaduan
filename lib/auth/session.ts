@@ -1,16 +1,19 @@
+import "server-only";
 import { randomBytes } from "node:crypto";
+import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getPrisma } from "@/lib/db/prisma";
 import { hmac, sha256 } from "@/lib/security/hash";
 import { can, type Permission, type StaffRole } from "@/lib/auth/permissions";
+import { originMatchesHost } from "@/lib/security/origin";
 
 const SESSION_COOKIE = "erbf_session";
 const SESSION_DAYS = 7;
 
 export type CurrentUser = { id: string; name: string; email: string; role: StaffRole; isTemporary: boolean };
 
-export async function getCurrentUser(): Promise<CurrentUser | null> {
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) return null;
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
@@ -21,16 +24,18 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   });
 
   if (!session || session.expiresAt <= new Date() || !session.user.isActive) {
-    if (session) await getPrisma().session.delete({ where: { id: session.id } }).catch(() => undefined);
     return null;
   }
 
   return { id: session.user.id, name: session.user.name, email: session.user.email, role: session.user.role, isTemporary: session.user.isTemporary };
-}
+});
 
 export async function requireStaff() {
   const user = await getCurrentUser();
-  if (!user) redirect("/admin/login");
+  if (!user) {
+    const hadSession = Boolean((await cookies()).get(SESSION_COOKIE)?.value);
+    redirect(hadSession ? "/admin/login?reason=session-expired" : "/admin/login");
+  }
   return user;
 }
 
@@ -60,11 +65,19 @@ export async function createSession(userId: string) {
     },
   });
 
-  (await cookies()).set(SESSION_COOKIE, token, {
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE, "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
+    expires: new Date(0),
+  });
+  cookieStore.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/admin",
     expires: expiresAt,
   });
 }
@@ -74,7 +87,9 @@ export async function destroyCurrentSession() {
   if (token && process.env.DATABASE_URL && process.env.SESSION_SECRET) {
     await getPrisma().session.deleteMany({ where: { tokenHash: hmac(token) } });
   }
-  (await cookies()).delete(SESSION_COOKIE);
+  const cookieStore = await cookies();
+  cookieStore.set(SESSION_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/admin", expires: new Date(0) });
+  cookieStore.set(SESSION_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", expires: new Date(0) });
 }
 
 export function hashIp(ip: string | null) {
@@ -85,8 +100,7 @@ export function hashIp(ip: string | null) {
 export async function assertSameOrigin() {
   const requestHeaders = await headers();
   const origin = requestHeaders.get("origin");
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
-  if (!origin || !host) return;
-  const originHost = new URL(origin).host;
-  if (originHost !== host) throw new Error("Solicitação inválida.");
+  const forwardedHost = requestHeaders.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost ?? requestHeaders.get("host")?.trim();
+  if (!origin || !host || !originMatchesHost(origin, host)) throw new Error("Solicitação inválida.");
 }

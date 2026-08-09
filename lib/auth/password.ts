@@ -7,10 +7,13 @@ const options = {
   parallelism: 1,
 };
 
+// Evita diferença mensurável entre um usuário existente e um inexistente.
+const dummyHash = hash("credencial-inexistente-para-comparacao", options);
+
 export function hashPassword(password: string) {
   return hash(password, options);
 }
 
-export function verifyPassword(passwordHash: string, password: string) {
-  return verify(passwordHash, password);
+export async function verifyPassword(passwordHash: string | null | undefined, password: string) {
+  return verify(passwordHash ?? await dummyHash, password);
 }

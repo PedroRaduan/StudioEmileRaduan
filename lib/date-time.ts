@@ -1,4 +1,14 @@
-const DEFAULT_TIMEZONE = "America/Sao_Paulo";
+import { DEFAULT_STUDIO_TIMEZONE } from "./studio-config";
+
+export const DEFAULT_TIMEZONE = DEFAULT_STUDIO_TIMEZONE;
+
+type LocalDateTimeParts = {
+  year: number;
+  month: number;
+  day: number;
+  hours: number;
+  minutes: number;
+};
 
 export function dateKeyInTimezone(value: Date, timezone = DEFAULT_TIMEZONE) {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -12,21 +22,27 @@ export function dateKeyInTimezone(value: Date, timezone = DEFAULT_TIMEZONE) {
 }
 
 export function dateInTimezone(date: string, time: string, timezone = DEFAULT_TIMEZONE) {
-  const [year, month, day] = date.split("-").map(Number);
-  const [hours, minutes] = time.split(":").map(Number);
-  const estimatedUtc = Date.UTC(year, month - 1, day, hours, minutes);
-  const timezoneName = new Intl.DateTimeFormat("en-US", { timeZone: timezone, timeZoneName: "longOffset" })
-    .formatToParts(new Date(estimatedUtc))
-    .find((part) => part.type === "timeZoneName")?.value;
-  const match = timezoneName?.match(/GMT([+-]\d{2}):(\d{2})/);
-  const offsetMinutes = match ? Number(match[1]) * 60 + Math.sign(Number(match[1])) * Number(match[2]) : -180;
-  return new Date(estimatedUtc - offsetMinutes * 60_000);
+  const desired = parseLocalDateTime(date, time);
+  const localAsUtc = Date.UTC(desired.year, desired.month - 1, desired.day, desired.hours, desired.minutes);
+
+  // O deslocamento pode mudar entre o instante estimado e o instante real em
+  // regiões com horário de verão. Duas passagens tornam a conversão estável.
+  let instant = new Date(localAsUtc - timezoneOffsetMs(new Date(localAsUtc), timezone));
+  instant = new Date(localAsUtc - timezoneOffsetMs(instant, timezone));
+
+  const converted = localParts(instant, timezone);
+  if (!sameLocalDateTime(converted, desired)) {
+    throw new RangeError("A data ou o horário não existe no fuso informado.");
+  }
+
+  return instant;
 }
 
 export function localDayRange(date: string, timezone = DEFAULT_TIMEZONE) {
   const start = dateInTimezone(date, "00:00", timezone);
-  const next = new Date(start.getTime() + 24 * 60 * 60 * 1000);
-  return { start, end: next };
+  const [year, month, day] = date.split("-").map(Number);
+  const nextCalendarDate = new Date(Date.UTC(year, month - 1, day + 1, 12)).toISOString().slice(0, 10);
+  return { start, end: dateInTimezone(nextCalendarDate, "00:00", timezone) };
 }
 
 export function weekdayInTimezone(value: Date, timezone = DEFAULT_TIMEZONE) {
@@ -48,4 +64,48 @@ export function formatTime(value: Date) {
 
 export function todayInTimezone(timezone = DEFAULT_TIMEZONE) {
   return dateKeyInTimezone(new Date(), timezone);
+}
+
+function parseLocalDateTime(date: string, time: string): LocalDateTimeParts {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw new RangeError("Data ou horário inválido.");
+  }
+
+  const [year, month, day] = date.split("-").map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
+  const calendarCheck = new Date(Date.UTC(year, month - 1, day, 12));
+  if (calendarCheck.getUTCFullYear() !== year || calendarCheck.getUTCMonth() !== month - 1 || calendarCheck.getUTCDate() !== day) {
+    throw new RangeError("Data inválida.");
+  }
+
+  return { year, month, day, hours, minutes };
+}
+
+function localParts(value: Date, timezone: string): LocalDateTimeParts & { seconds: number } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((item) => item.type === type)?.value);
+  return { year: part("year"), month: part("month"), day: part("day"), hours: part("hour"), minutes: part("minute"), seconds: part("second") };
+}
+
+function timezoneOffsetMs(value: Date, timezone: string) {
+  const parts = localParts(value, timezone);
+  const representedAsUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hours, parts.minutes, parts.seconds);
+  return representedAsUtc - value.getTime();
+}
+
+function sameLocalDateTime(actual: LocalDateTimeParts, expected: LocalDateTimeParts) {
+  return actual.year === expected.year
+    && actual.month === expected.month
+    && actual.day === expected.day
+    && actual.hours === expected.hours
+    && actual.minutes === expected.minutes;
 }

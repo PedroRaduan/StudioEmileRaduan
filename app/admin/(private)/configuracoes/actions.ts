@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { assertSameOrigin, requireOwner } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
+import { CURRENT_STUDIO_ID } from "@/lib/studio-config";
 
 export type SettingsFormState = { error?: string; success?: string };
 const optionalText = z.string().trim().max(4000).optional().transform((value) => value || null);
@@ -25,8 +26,8 @@ export async function saveSettingsAction(_: SettingsFormState, formData: FormDat
   if (!parsed.success) return { error: "Revise as informações do studio." };
   try {
     await getPrisma().$transaction([
-      getPrisma().studioSettings.upsert({ where: { id: "studio" }, create: { id: "studio", ...parsed.data }, update: parsed.data }),
-      getPrisma().auditLog.create({ data: { userId: owner.id, action: "SETTINGS_UPDATED", entityType: "StudioSettings", entityId: "studio" } }),
+      getPrisma().studioSettings.upsert({ where: { id: CURRENT_STUDIO_ID }, create: { id: CURRENT_STUDIO_ID, ...parsed.data }, update: parsed.data }),
+      getPrisma().auditLog.create({ data: { userId: owner.id, action: "SETTINGS_UPDATED", entityType: "StudioSettings", entityId: CURRENT_STUDIO_ID } }),
     ]);
     revalidatePath("/"); revalidatePath("/agendar"); revalidatePath("/admin/configuracoes");
     return { success: "Configurações salvas." };

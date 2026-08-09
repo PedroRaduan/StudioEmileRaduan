@@ -1,11 +1,13 @@
-import { dateInTimezone } from "@/lib/date-time";
+import "server-only";
+import { localDayRange } from "@/lib/date-time";
+import { requirePermission } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
 
 export async function getReports(from: string, to: string) {
+  await requirePermission("REPORTS_VIEW");
   const prisma = getPrisma();
-  const startsAt = dateInTimezone(from, "00:00");
-  const endsAt = dateInTimezone(to, "00:00");
-  endsAt.setDate(endsAt.getDate() + 1);
+  const startsAt = localDayRange(from).start;
+  const endsAt = localDayRange(to).end;
   const [appointments, newClients, recentAudit] = await Promise.all([
     prisma.appointment.findMany({ where: { startsAt: { gte: startsAt, lt: endsAt } }, select: { status: true, priceCents: true, payment: { select: { amountDueCents: true, amountPaidCents: true, status: true } }, service: { select: { name: true } } } }),
     prisma.client.count({ where: { deletedAt: null, createdAt: { gte: startsAt, lt: endsAt } } }),
@@ -36,4 +38,3 @@ export async function getReports(from: string, to: string) {
     recentAudit,
   };
 }
-

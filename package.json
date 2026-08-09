@@ -12,6 +12,7 @@
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next --ignore-pattern app/generated",
     "test": "vitest run",
+    "test:integration": "node --env-file=.env.local --import tsx scripts/test-appointment-concurrency.ts",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",

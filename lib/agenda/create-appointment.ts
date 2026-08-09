@@ -3,6 +3,8 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { dateInTimezone, dateKeyInTimezone, weekdayInTimezone } from "@/lib/date-time";
 import { getPrisma } from "@/lib/db/prisma";
 import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
+import { CURRENT_STUDIO_ID, DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
+import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 
 export class SchedulingError extends Error {}
 
@@ -33,7 +35,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
         tx.client.findFirst({ where: { id: input.clientId, deletedAt: null } }),
         tx.service.findFirst({ where: { id: input.serviceId, isActive: true } }),
         tx.calendarResource.findFirst({ where: { id: input.resourceId, isActive: true } }),
-        tx.studioSettings.findUnique({ where: { id: "studio" } }),
+        tx.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } }),
       ]);
       if (!client) throw new SchedulingError("A cliente selecionada não está disponível.");
       if (client.status === "BLOCKED") throw new SchedulingError("Esta cliente está bloqueada para novos agendamentos.");
@@ -44,7 +46,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
       const maximumAdvanceDays = Math.min(settings?.maxAdvanceDays ?? 90, service.maxAdvanceDays);
       if (startsAt.getTime() - Date.now() > maximumAdvanceDays * 24 * 60 * 60 * 1000) throw new SchedulingError(`Este serviço pode ser marcado com no máximo ${maximumAdvanceDays} dia(s) de antecedência.`);
 
-      const timezone = settings?.timezone ?? "America/Sao_Paulo";
+      const timezone = settings?.timezone ?? DEFAULT_STUDIO_TIMEZONE;
       const localDate = dateKeyInTimezone(startsAt, timezone);
       const timing = occupiedWindow(startsAt, service);
       const startMinute = Number(input.time.slice(0, 2)) * 60 + Number(input.time.slice(3, 5));
@@ -108,15 +110,11 @@ export async function createAppointment(input: CreateAppointmentInput) {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 });
   } catch (error) {
     if (error instanceof SchedulingError) throw error;
-    if (isConflictError(error)) throw new SchedulingError("Este horário acabou de ser ocupado. Escolha outro horário.");
+    if (isSchedulingConflictError(error)) throw new SchedulingError("Este horário acabou de ser ocupado. Escolha outro horário.");
     throw error;
   }
 }
 
 function appointmentCode() {
   return `ERBF-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${randomBytes(3).toString("hex").toUpperCase()}`;
-}
-
-function isConflictError(error: unknown) {
-  return typeof error === "object" && error !== null && "code" in error && ["P2002", "P2034", "P2010"].includes(String(error.code));
 }

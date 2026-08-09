@@ -3,7 +3,6 @@ export { initialAdminSchema, isInitialSetupAllowed, strongPasswordSchema } from 
 
 export const ADMIN_TERMS_VERSION = "2026-08-07";
 export const ADMIN_PRIVACY_VERSION = "2026-08-07";
-export const TEMPORARY_ACCESS_VERSION = "2026-08-07";
 export const INITIAL_SETUP_LOCK_ID = 728104519;
 
 export type AdminSetupState = "ready" | "needs_setup" | "unavailable";

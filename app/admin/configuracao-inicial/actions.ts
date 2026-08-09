@@ -9,11 +9,11 @@ import {
   ADMIN_PRIVACY_VERSION,
   ADMIN_TERMS_VERSION,
   INITIAL_SETUP_LOCK_ID,
-  TEMPORARY_ACCESS_VERSION,
   initialAdminSchema,
   isInitialSetupAllowed,
 } from "@/lib/auth/initial-setup";
 import { getPrisma } from "@/lib/db/prisma";
+import { CURRENT_STUDIO_ID, DEFAULT_STUDIO_TIMEZONE, STUDIO_BRAND } from "@/lib/studio-config";
 
 export type InitialSetupFormState = { error?: string };
 
@@ -38,15 +38,14 @@ export async function createInitialAdminAction(_: InitialSetupFormState, formDat
       // desserializa. O cast preserva o lock transacional e torna o retorno seguro.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(${INITIAL_SETUP_LOCK_ID})::text AS "lock"`;
       if (await tx.user.count() > 0) throw new Error("SETUP_ALREADY_COMPLETED");
-      const user = await tx.user.create({ data: { name: parsed.data.name, email: parsed.data.email, passwordHash, role: "OWNER", isTemporary: true } });
+      const user = await tx.user.create({ data: { name: parsed.data.name, email: parsed.data.email, passwordHash, role: "OWNER", isTemporary: false } });
       await tx.adminAgreement.createMany({ data: [
         { userId: user.id, type: "TERMS", version: ADMIN_TERMS_VERSION, ipHash, userAgent },
         { userId: user.id, type: "PRIVACY", version: ADMIN_PRIVACY_VERSION, ipHash, userAgent },
-        { userId: user.id, type: "TEMPORARY_ACCESS", version: TEMPORARY_ACCESS_VERSION, ipHash, userAgent },
       ] });
-      await tx.studioSettings.upsert({ where: { id: "studio" }, create: { id: "studio", studioName: "Emile Raduan Beauty Face", timezone: "America/Sao_Paulo", onlineBookingEnabled: false }, update: {} });
+      await tx.studioSettings.upsert({ where: { id: CURRENT_STUDIO_ID }, create: { id: CURRENT_STUDIO_ID, studioName: STUDIO_BRAND.name, timezone: DEFAULT_STUDIO_TIMEZONE, onlineBookingEnabled: false }, update: {} });
       if (!await tx.calendarResource.findFirst({ where: { isActive: true } })) await tx.calendarResource.create({ data: { name: "Agenda principal" } });
-      await tx.auditLog.create({ data: { userId: user.id, action: "TEMPORARY_OWNER_CREATED_FROM_SETUP", entityType: "User", entityId: user.id, ipHash, after: { termsVersion: ADMIN_TERMS_VERSION, privacyVersion: ADMIN_PRIVACY_VERSION, temporary: true } } });
+      await tx.auditLog.create({ data: { userId: user.id, action: "INITIAL_OWNER_CREATED", entityType: "User", entityId: user.id, ipHash, after: { termsVersion: ADMIN_TERMS_VERSION, privacyVersion: ADMIN_PRIVACY_VERSION } } });
       return user.id;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 15000 });
   } catch (error) {

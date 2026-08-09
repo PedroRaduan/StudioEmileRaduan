@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
-import { assertSameOrigin, createSession, destroyCurrentSession, requireOwner } from "@/lib/auth/session";
+import { assertSameOrigin, createSession, requireOwner } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { ADMIN_PRIVACY_VERSION, ADMIN_TERMS_VERSION, strongPasswordSchema } from "@/lib/auth/initial-setup";
 import { getPrisma } from "@/lib/db/prisma";
@@ -48,25 +47,4 @@ export async function finalizeOwnerAccessAction(_: AccountAccessState, formData:
   await createSession(user.id);
   revalidatePath("/admin", "layout");
   return { success: "Acesso definitivo criado. As outras sessões foram encerradas." };
-}
-
-const removalSchema = z.object({ currentPassword: z.string().min(1), confirmation: z.literal("REMOVER ACESSO") });
-
-export async function removeTemporaryOwnerAction(_: AccountAccessState, formData: FormData): Promise<AccountAccessState> {
-  await assertSameOrigin();
-  const owner = await requireOwner();
-  const parsed = removalSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "Digite REMOVER ACESSO exatamente como indicado." };
-  const prisma = getPrisma();
-  const user = await prisma.user.findUnique({ where: { id: owner.id } });
-  if (!user?.isTemporary) return { error: "Somente um acesso temporário pode ser removido por este fluxo." };
-  if (!await verifyPassword(user.passwordHash, parsed.data.currentPassword)) return { error: "A senha atual está incorreta." };
-  if (await prisma.user.count() > 1) return { error: "Remova primeiro os outros usuários internos ou torne este acesso definitivo." };
-
-  await prisma.$transaction([
-    prisma.auditLog.create({ data: { userId: user.id, action: "TEMPORARY_OWNER_REMOVED", entityType: "User", entityId: user.id, before: { temporary: true } } }),
-    prisma.user.delete({ where: { id: user.id } }),
-  ]);
-  await destroyCurrentSession();
-  redirect("/admin/configuracao-inicial?removed=1");
 }

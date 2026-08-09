@@ -16,7 +16,6 @@ export const initialAdminSchema = z.object({
   confirmPassword: z.string(),
   termsAccepted: z.literal("on", { errorMap: () => ({ message: "Aceite os termos de administração." }) }),
   privacyAccepted: z.literal("on", { errorMap: () => ({ message: "Aceite o aviso de privacidade." }) }),
-  temporaryAccepted: z.literal("on", { errorMap: () => ({ message: "Confirme que este acesso é temporário." }) }),
 }).refine((data) => data.password === data.confirmPassword, { path: ["confirmPassword"], message: "As senhas não conferem." })
   .refine((data) => !data.password.toLowerCase().includes(data.email.split("@")[0].toLowerCase()), { path: ["password"], message: "A senha não deve conter seu e-mail." });
 

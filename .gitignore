@@ -43,3 +43,8 @@ next-env.d.ts
 /app/generated/
 /dev*.log
 /*-dev*.log
+/prod-test*.log
+
+# arquivos de orientação gerados automaticamente pelo Next.js em desenvolvimento
+/AGENTS.md
+/CLAUDE.md

@@ -23,15 +23,19 @@ export async function createClientAction(_: ClientFormState, formData: FormData)
   const owner = await requirePermission("CLIENTS_MANAGE");
   const parsed = clientSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise os dados informados." };
+  let clientId: string;
   try {
-    const client = await getPrisma().client.create({ data: { ...parsed.data, birthDate: parsed.data.birthDate ? new Date(`${parsed.data.birthDate}T12:00:00Z`) : null } });
-    await getPrisma().auditLog.create({ data: { userId: owner.id, action: "CLIENT_CREATED", entityType: "Client", entityId: client.id } });
-    revalidatePath("/admin/clientes"); revalidatePath("/admin");
-    redirect(`/admin/clientes/${client.id}`);
+    clientId = await getPrisma().$transaction(async (tx) => {
+      const client = await tx.client.create({ data: { ...parsed.data, birthDate: parsed.data.birthDate ? new Date(`${parsed.data.birthDate}T12:00:00Z`) : null } });
+      await tx.auditLog.create({ data: { userId: owner.id, action: "CLIENT_CREATED", entityType: "Client", entityId: client.id } });
+      return client.id;
+    });
   } catch (error) {
     if (isUniqueError(error)) return { error: "Já existe uma cliente cadastrada com este e-mail." };
     return { error: "Não foi possível cadastrar a cliente. Tente novamente." };
   }
+  revalidatePath("/admin/clientes"); revalidatePath("/admin");
+  redirect(`/admin/clientes/${clientId}`);
 }
 
 function isUniqueError(error: unknown) {

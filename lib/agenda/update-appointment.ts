@@ -3,6 +3,8 @@ import { dateInTimezone, dateKeyInTimezone, weekdayInTimezone } from "@/lib/date
 import { getPrisma } from "@/lib/db/prisma";
 import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
 import { SchedulingError } from "@/lib/agenda/create-appointment";
+import { CURRENT_STUDIO_ID, DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
+import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 
 export async function rescheduleAppointment(input: { appointmentId: string; date: string; time: string; reason: string; actorUserId: string }) {
   const startsAt = dateInTimezone(input.date, input.time);
@@ -15,12 +17,12 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
       if (!appointment) throw new SchedulingError("Agendamento não encontrado.");
       if (["COMPLETED", "CANCELED"].includes(appointment.status)) throw new SchedulingError("Este atendimento não pode mais ser reagendado.");
 
-      const settings = await tx.studioSettings.findUnique({ where: { id: "studio" } });
+      const settings = await tx.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } });
       const minimumNoticeHours = Math.max(settings?.minNoticeHours ?? 0, appointment.service.minAdvanceHours);
       if (startsAt.getTime() - Date.now() < minimumNoticeHours * 60 * 60 * 1000) throw new SchedulingError(`Este serviço exige pelo menos ${minimumNoticeHours} hora(s) de antecedência.`);
       const maximumAdvanceDays = Math.min(settings?.maxAdvanceDays ?? 90, appointment.service.maxAdvanceDays);
       if (startsAt.getTime() - Date.now() > maximumAdvanceDays * 24 * 60 * 60 * 1000) throw new SchedulingError(`Este serviço pode ser marcado com no máximo ${maximumAdvanceDays} dia(s) de antecedência.`);
-      const timezone = settings?.timezone ?? "America/Sao_Paulo";
+      const timezone = settings?.timezone ?? DEFAULT_STUDIO_TIMEZONE;
       const timing = occupiedWindow(startsAt, appointment.service);
       const startMinute = Number(input.time.slice(0, 2)) * 60 + Number(input.time.slice(3, 5));
       const endMinute = startMinute + appointment.service.durationMinutes;
@@ -52,7 +54,7 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 });
   } catch (error) {
     if (error instanceof SchedulingError) throw error;
-    if (isConflictError(error)) throw new SchedulingError("O novo horário acabou de ser ocupado. Escolha outra opção.");
+    if (isSchedulingConflictError(error)) throw new SchedulingError("O novo horário acabou de ser ocupado. Escolha outra opção.");
     throw error;
   }
 }
@@ -73,8 +75,4 @@ export async function cancelAppointment(input: { appointmentId: string; reason: 
     await tx.auditLog.create({ data: { userId: input.actorUserId, action: "APPOINTMENT_CANCELED", entityType: "Appointment", entityId: appointment.id, before: { status: appointment.status }, after: { status: "CANCELED", reason: input.reason } } });
     return updated;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
-}
-
-function isConflictError(error: unknown) {
-  return typeof error === "object" && error !== null && "code" in error && ["P2002", "P2034", "P2010"].includes(String(error.code));
 }

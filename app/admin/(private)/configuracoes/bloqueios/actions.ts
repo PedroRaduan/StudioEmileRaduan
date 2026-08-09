@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { Prisma } from "@/app/generated/prisma/client";
 import { dateInTimezone } from "@/lib/date-time";
 import { assertSameOrigin, requirePermission } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
@@ -23,16 +24,30 @@ export async function createBlockAction(_: AvailabilityFormState, formData: Form
   const owner = await requirePermission("SETTINGS_MANAGE");
   const parsed = blockSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise o bloqueio." };
-  const startsAt = dateInTimezone(parsed.data.date, parsed.data.startsAt);
-  const endsAt = dateInTimezone(parsed.data.date, parsed.data.endsAt);
+  const period = safePeriod(parsed.data.date, parsed.data.startsAt, parsed.data.endsAt);
+  if (!period) return { error: "Informe uma data e horários válidos." };
+  const { startsAt, endsAt } = period;
   if (endsAt <= startsAt) return { error: "O término precisa ser posterior ao início." };
   const prisma = getPrisma();
-  const conflict = await prisma.appointment.findFirst({ where: { resourceId: parsed.data.resourceId, status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] }, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt } } });
-  if (conflict) return { error: "Já existe um atendimento nesse período. Reagende-o antes de bloquear." };
-  const block = await prisma.scheduleBlock.create({ data: { resourceId: parsed.data.resourceId, startsAt, endsAt, title: parsed.data.title, note: parsed.data.note } });
-  await prisma.auditLog.create({ data: { userId: owner.id, action: "SCHEDULE_BLOCK_CREATED", entityType: "ScheduleBlock", entityId: block.id, after: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), title: block.title } } });
-  refreshAvailability();
-  return { success: "Horário bloqueado. Novos agendamentos serão impedidos nesse período." };
+  try {
+    await prisma.$transaction(async (tx) => {
+      const [conflict, activeHold] = await Promise.all([
+        tx.appointment.findFirst({ where: { resourceId: parsed.data.resourceId, status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] }, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt } } }),
+        tx.bookingHold.findFirst({ where: { resourceId: parsed.data.resourceId, status: "ACTIVE", expiresAt: { gt: new Date() }, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt } } }),
+      ]);
+      if (conflict) throw new Error("APPOINTMENT_CONFLICT");
+      if (activeHold) throw new Error("ACTIVE_HOLD_CONFLICT");
+      const block = await tx.scheduleBlock.create({ data: { resourceId: parsed.data.resourceId, startsAt, endsAt, title: parsed.data.title, note: parsed.data.note } });
+      await tx.auditLog.create({ data: { userId: owner.id, action: "SCHEDULE_BLOCK_CREATED", entityType: "ScheduleBlock", entityId: block.id, after: { startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), title: block.title } } });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 });
+    refreshAvailability();
+    return { success: "Horário bloqueado. Novos agendamentos serão impedidos nesse período." };
+  } catch (error) {
+    if (error instanceof Error && error.message === "APPOINTMENT_CONFLICT") return { error: "Já existe um atendimento nesse período. Reagende-o antes de bloquear." };
+    if (error instanceof Error && error.message === "ACTIVE_HOLD_CONFLICT") return { error: "Uma cliente está concluindo uma reserva nesse horário. Aguarde alguns minutos e tente novamente." };
+    if (typeof error === "object" && error !== null && "code" in error && String(error.code) === "P2034") return { error: "A agenda mudou durante o bloqueio. Confira os horários e tente novamente." };
+    return { error: "Não foi possível bloquear o horário. Tente novamente." };
+  }
 }
 
 const exceptionSchema = z.object({
@@ -52,7 +67,8 @@ export async function saveExceptionAction(_: AvailabilityFormState, formData: Fo
   const startsAtMinute = !isClosed && parsed.data.startsAt && timePattern.test(parsed.data.startsAt) ? toMinutes(parsed.data.startsAt) : null;
   const endsAtMinute = !isClosed && parsed.data.endsAt && timePattern.test(parsed.data.endsAt) ? toMinutes(parsed.data.endsAt) : null;
   if (!isClosed && (startsAtMinute === null || endsAtMinute === null || endsAtMinute <= startsAtMinute)) return { error: "Para horário especial, informe início e fim válidos." };
-  const date = dateInTimezone(parsed.data.date, "00:00");
+  const date = safeDate(parsed.data.date);
+  if (!date) return { error: "Informe uma data válida." };
   const prisma = getPrisma();
   const exception = await prisma.availabilityException.upsert({ where: { resourceId_date: { resourceId: parsed.data.resourceId, date } }, create: { resourceId: parsed.data.resourceId, date, startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note }, update: { startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note } });
   await prisma.auditLog.create({ data: { userId: owner.id, action: "AVAILABILITY_EXCEPTION_SAVED", entityType: "AvailabilityException", entityId: exception.id, after: { date: parsed.data.date, isClosed, startsAtMinute, endsAtMinute } } });
@@ -87,5 +103,18 @@ export async function deleteExceptionAction(formData: FormData) {
 }
 
 function toMinutes(time: string) { const [hours, minutes] = time.split(":").map(Number); return hours * 60 + minutes; }
+function safeDate(date: string) {
+  try {
+    return dateInTimezone(date, "00:00");
+  } catch {
+    return null;
+  }
+}
+function safePeriod(date: string, startsAt: string, endsAt: string) {
+  try {
+    return { startsAt: dateInTimezone(date, startsAt), endsAt: dateInTimezone(date, endsAt) };
+  } catch {
+    return null;
+  }
+}
 function refreshAvailability() { revalidatePath("/admin/configuracoes/bloqueios"); revalidatePath("/admin/agenda"); revalidatePath("/admin/agendamentos/novo"); }
-

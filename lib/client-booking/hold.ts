@@ -6,6 +6,7 @@ import { getPrisma } from "@/lib/db/prisma";
 import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
 import { sha256 } from "@/lib/security/hash";
 import { BOOKING_HOLD_COOKIE } from "./availability";
+import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 
 export class BookingError extends Error {}
 
@@ -66,7 +67,7 @@ export async function createBookingHold(input: { serviceId: string; date: string
     return hold;
   } catch (error) {
     if (error instanceof BookingError) throw error;
-    if (isConflictError(error)) throw new BookingError("Este horário acabou de ser reservado. Escolha outra opção.");
+    if (isSchedulingConflictError(error)) throw new BookingError("Este horário acabou de ser reservado. Escolha outra opção.");
     throw error;
   }
 }
@@ -87,8 +88,4 @@ export async function releaseCurrentBookingHold() {
   const token = cookieStore.get(BOOKING_HOLD_COOKIE)?.value;
   if (token && process.env.DATABASE_URL) await getPrisma().bookingHold.updateMany({ where: { tokenHash: sha256(token), status: "ACTIVE" }, data: { status: "RELEASED" } });
   cookieStore.delete(BOOKING_HOLD_COOKIE);
-}
-
-function isConflictError(error: unknown) {
-  return typeof error === "object" && error !== null && "code" in error && ["P2002", "P2034", "P2010"].includes(String(error.code));
 }

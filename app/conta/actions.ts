@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { assertSameOrigin, hashIp } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
+import { isAuthRateLimited, recordAuthAttempt } from "@/lib/auth/rate-limit";
 import { createClientSession, destroyClientSession, requireClient, safeReturnTo } from "@/lib/client-auth/session";
 import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
@@ -32,14 +33,14 @@ export async function clientLoginAction(_: ClientAuthState, formData: FormData):
 
   const prisma = getPrisma();
   const identifierHash = sha256(`client:${parsed.data.email}`);
-  const cutoff = new Date(Date.now() - 10 * 60 * 1000);
-  const failedAttempts = await prisma.loginAttempt.count({ where: { identifierHash, succeeded: false, createdAt: { gt: cutoff } } });
-  if (failedAttempts >= 5) return { error: "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente." };
+  const requestHeaders = await headers();
+  const ipHash = hashIp(requestHeaders.get("x-forwarded-for") ?? requestHeaders.get("x-real-ip"));
+  if (await isAuthRateLimited({ identifierHash, ipHash })) return { error: "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente." };
 
   const account = await prisma.clientAccount.findUnique({ where: { email: parsed.data.email }, include: { client: true } });
-  const isValid = Boolean(account?.isActive && !account.client.deletedAt && await verifyPassword(account.passwordHash, parsed.data.password));
-  const requestHeaders = await headers();
-  await prisma.loginAttempt.create({ data: { identifierHash, ipHash: hashIp(requestHeaders.get("x-forwarded-for")), succeeded: isValid } });
+  const passwordMatches = await verifyPassword(account?.passwordHash, parsed.data.password);
+  const isValid = Boolean(account?.isActive && !account.client.deletedAt && passwordMatches);
+  await recordAuthAttempt(identifierHash, ipHash, isValid);
   if (!account || !isValid) return { error: "E-mail ou senha incorretos." };
 
   await prisma.clientAccount.update({ where: { id: account.id }, data: { lastLoginAt: new Date() } });

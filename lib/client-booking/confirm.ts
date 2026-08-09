@@ -6,6 +6,7 @@ import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
 import { BOOKING_HOLD_COOKIE } from "./availability";
 import { BookingError } from "./hold";
+import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 
 export async function confirmBookingHold(input: { clientId: string }) {
   const cookieStore = await cookies();
@@ -62,7 +63,7 @@ export async function confirmBookingHold(input: { clientId: string }) {
     return appointment;
   } catch (error) {
     if (error instanceof BookingError) throw error;
-    if (typeof error === "object" && error !== null && "code" in error && ["P2002", "P2034", "P2010"].includes(String(error.code))) throw new BookingError("Este horário acabou de ser ocupado. Escolha outra opção.");
+    if (isSchedulingConflictError(error)) throw new BookingError("Este horário acabou de ser ocupado. Escolha outra opção.");
     throw error;
   }
 }

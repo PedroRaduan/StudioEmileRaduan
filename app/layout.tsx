@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
-import { PwaRegister } from "@/components/pwa-register";
+import { STUDIO_BRAND } from "@/lib/studio-config";
 
 export const viewport: Viewport = {
   themeColor: "#9A5B67",
@@ -17,12 +17,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase,
     title: {
-      default: "Emile Raduan Beauty Face",
-      template: "%s | Emile Raduan Beauty Face",
+      default: STUDIO_BRAND.name,
+      template: `%s | ${STUDIO_BRAND.name}`,
     },
     description: "Agenda e cuidados personalizados.",
-    applicationName: "Emile Raduan Beauty Face",
-    manifest: "/manifest.webmanifest",
+    applicationName: STUDIO_BRAND.name,
     icons: {
       icon: "/icon-192.png",
       apple: "/icon-192.png",
@@ -30,13 +29,13 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type: "website",
       locale: "pt_BR",
-      title: "Emile Raduan Beauty Face",
+      title: STUDIO_BRAND.name,
       description: "Agenda e cuidados personalizados.",
-      images: [{ url: "/og.png", width: 1800, height: 1000, alt: "Emile Raduan Beauty Face" }],
+      images: [{ url: "/og.png", width: 1800, height: 1000, alt: STUDIO_BRAND.name }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "Emile Raduan Beauty Face",
+      title: STUDIO_BRAND.name,
       description: "Agenda e cuidados personalizados.",
       images: ["/og.png"],
     },
@@ -45,9 +44,8 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR">
+    <html data-scroll-behavior="smooth" lang="pt-BR">
       <body>
-        <PwaRegister />
         {children}
       </body>
     </html>
