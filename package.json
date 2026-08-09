@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "npm run build:application",
+    "vercel-build": "npm run db:deploy && npm run build:application",
     "build:application": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next --ignore-pattern app/generated",

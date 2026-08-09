@@ -354,10 +354,12 @@ Os valores são segredos. Não use o prefixo `NEXT_PUBLIC_`, pois isso os enviar
 Em **Project → Settings → Build and Deployment**, use:
 
 ```text
-npm run build
+npm run vercel-build
 ```
 
-Esse comando somente compila e valida a aplicação. Migrations são uma etapa deliberada e devem ser aplicadas antes do deploy com `npm run db:deploy`, contra o banco do ambiente correto. Não use `prisma migrate dev` em produção.
+O arquivo `vercel.json` já configura esse comando. Ele primeiro executa `prisma migrate deploy` e só publica a aplicação se as migrations pendentes forem aplicadas com sucesso; em seguida compila e valida o Next.js. `migrate deploy` aplica exclusivamente migrations já versionadas e não usa `reset`, `migrate dev` ou `db push`.
+
+Para não alterar o banco compartilhado por acidente, configure um banco/branch exclusivo em **Preview**. Production e Preview nunca devem compartilhar a mesma `DATABASE_URL`.
 
 Mantenha:
 
@@ -523,12 +525,13 @@ Não atualize o npm globalmente. Instale o Node 24 LTS e use o npm que acompanha
 Confira, nesta ordem:
 
 1. Node `24.x`;
-2. `DATABASE_URL` de produção;
+2. `DATABASE_URL` do ambiente do deploy;
 3. `SESSION_SECRET`;
 4. `SENSITIVE_DATA_KEY`;
-5. migrations aplicadas previamente com `npm run db:deploy` contra o banco de produção;
-6. Build Command `npm run build`;
-7. novo deploy depois de salvar variáveis.
+5. migrations versionadas dentro de `prisma/migrations`;
+6. Build Command `npm run vercel-build` (já definido em `vercel.json`);
+7. banco separado para Preview e Production;
+8. novo deploy depois de salvar variáveis.
 
 ### O site publicou, mas a administração não abre
 
