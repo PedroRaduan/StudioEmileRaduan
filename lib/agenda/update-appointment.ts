@@ -5,10 +5,9 @@ import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
 import { SchedulingError } from "@/lib/agenda/create-appointment";
 import { CURRENT_STUDIO_ID, DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export async function rescheduleAppointment(input: { appointmentId: string; date: string; time: string; reason: string; actorUserId: string }) {
-  const startsAt = dateInTimezone(input.date, input.time);
-  if (startsAt <= new Date()) throw new SchedulingError("Escolha um horário futuro.");
   const prisma = getPrisma();
 
   try {
@@ -18,11 +17,13 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
       if (["COMPLETED", "CANCELED"].includes(appointment.status)) throw new SchedulingError("Este atendimento não pode mais ser reagendado.");
 
       const settings = await tx.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } });
+      const timezone = settings?.timezone ?? DEFAULT_STUDIO_TIMEZONE;
+      const startsAt = dateInTimezone(input.date, input.time, timezone);
+      if (startsAt <= new Date()) throw new SchedulingError("Escolha um horário futuro.");
       const minimumNoticeHours = Math.max(settings?.minNoticeHours ?? 0, appointment.service.minAdvanceHours);
       if (startsAt.getTime() - Date.now() < minimumNoticeHours * 60 * 60 * 1000) throw new SchedulingError(`Este serviço exige pelo menos ${minimumNoticeHours} hora(s) de antecedência.`);
       const maximumAdvanceDays = Math.min(settings?.maxAdvanceDays ?? 90, appointment.service.maxAdvanceDays);
       if (startsAt.getTime() - Date.now() > maximumAdvanceDays * 24 * 60 * 60 * 1000) throw new SchedulingError(`Este serviço pode ser marcado com no máximo ${maximumAdvanceDays} dia(s) de antecedência.`);
-      const timezone = settings?.timezone ?? DEFAULT_STUDIO_TIMEZONE;
       const timing = occupiedWindow(startsAt, appointment.service);
       const startMinute = Number(input.time.slice(0, 2)) * 60 + Number(input.time.slice(3, 5));
       const endMinute = startMinute + appointment.service.durationMinutes;
@@ -35,7 +36,7 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
         tx.availabilityException.findUnique({ where: { resourceId_date: { resourceId: appointment.resourceId, date: dateOnly } } }),
         tx.holiday.findUnique({ where: { date: dateOnly } }),
         tx.scheduleBlock.findFirst({ where: { resourceId: appointment.resourceId, startsAt: { lt: timing.occupiedUntil }, endsAt: { gt: timing.occupiedFrom } } }),
-        tx.appointment.findFirst({ where: { id: { not: appointment.id }, resourceId: appointment.resourceId, status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
+        tx.appointment.findFirst({ where: { id: { not: appointment.id }, resourceId: appointment.resourceId, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
         tx.bookingHold.findFirst({ where: { resourceId: appointment.resourceId, status: "ACTIVE", expiresAt: { gt: new Date() }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
       ]);
 
@@ -47,7 +48,7 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
       if (block || conflict || holdConflict) throw new SchedulingError("O novo horário está ocupado. Escolha outra opção.");
 
       const previous = { startsAt: appointment.startsAt.toISOString(), endsAt: appointment.endsAt.toISOString(), status: appointment.status };
-      const updated = await tx.appointment.update({ where: { id: appointment.id }, data: { ...timing, durationMinutes: appointment.service.durationMinutes, status: "SCHEDULED", cancellationReason: null, cancelledAt: null } });
+      const updated = await tx.appointment.update({ where: { id: appointment.id }, data: { ...timing, durationMinutes: appointment.service.durationMinutes, status: "SCHEDULED", confirmedAt: null, cancellationReason: null, cancelledAt: null } });
       await tx.appointmentEvent.create({ data: { appointmentId: appointment.id, actorUserId: input.actorUserId, type: "RESCHEDULED", reason: input.reason, previousValue: previous, nextValue: { startsAt: updated.startsAt.toISOString(), endsAt: updated.endsAt.toISOString(), status: updated.status } } });
       await tx.auditLog.create({ data: { userId: input.actorUserId, action: "APPOINTMENT_RESCHEDULED", entityType: "Appointment", entityId: appointment.id, before: previous, after: { startsAt: updated.startsAt.toISOString(), status: updated.status } } });
       return updated;

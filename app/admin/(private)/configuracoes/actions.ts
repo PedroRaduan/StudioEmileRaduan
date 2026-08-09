@@ -20,6 +20,9 @@ const settingsSchema = z.object({
   maxClientReschedules: z.coerce.number().int().min(0).max(10),
   cancellationPolicy: optionalText,
 });
+const calendarGridSchema = z.object({
+  calendarSlotInterval: z.enum(["5", "10", "15", "30"]).transform(Number),
+});
 
 export async function saveSettingsAction(_: SettingsFormState, formData: FormData): Promise<SettingsFormState> {
   await assertSameOrigin(); const owner = await requireOwner(); const parsed = settingsSchema.safeParse(Object.fromEntries(formData));
@@ -42,6 +45,38 @@ export async function initializeAgendaAction() {
     await prisma.auditLog.create({ data: { userId: owner.id, action: "CALENDAR_RESOURCE_CREATED", entityType: "CalendarResource", entityId: resource.id } });
   }
   revalidatePath("/admin/configuracoes/horarios"); redirect("/admin/configuracoes/horarios");
+}
+
+export async function saveCalendarGridAction(_: SettingsFormState, formData: FormData): Promise<SettingsFormState> {
+  await assertSameOrigin();
+  const owner = await requireOwner();
+  const parsed = calendarGridSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Escolha um intervalo válido para a grade." };
+
+  try {
+    const prisma = getPrisma();
+    await prisma.$transaction([
+      prisma.studioSettings.upsert({
+        where: { id: CURRENT_STUDIO_ID },
+        create: { id: CURRENT_STUDIO_ID, calendarSlotInterval: parsed.data.calendarSlotInterval },
+        update: { calendarSlotInterval: parsed.data.calendarSlotInterval },
+      }),
+      prisma.auditLog.create({
+        data: {
+          userId: owner.id,
+          action: "CALENDAR_GRID_UPDATED",
+          entityType: "StudioSettings",
+          entityId: CURRENT_STUDIO_ID,
+          after: { calendarSlotInterval: parsed.data.calendarSlotInterval },
+        },
+      }),
+    ]);
+    revalidatePath("/admin/agenda");
+    revalidatePath("/admin/configuracoes/agenda");
+    return { success: "Intervalo da agenda atualizado." };
+  } catch {
+    return { error: "Não foi possível atualizar a grade da agenda." };
+  }
 }
 
 export async function saveHoursAction(_: SettingsFormState, formData: FormData): Promise<SettingsFormState> {

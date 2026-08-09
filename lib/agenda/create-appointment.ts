@@ -5,6 +5,7 @@ import { getPrisma } from "@/lib/db/prisma";
 import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
 import { CURRENT_STUDIO_ID, DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export class SchedulingError extends Error {}
 
@@ -21,8 +22,6 @@ export type CreateAppointmentInput = {
 
 export async function createAppointment(input: CreateAppointmentInput) {
   const prisma = getPrisma();
-  const startsAt = dateInTimezone(input.date, input.time);
-  if (startsAt <= new Date()) throw new SchedulingError("Escolha um horário futuro.");
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -41,12 +40,14 @@ export async function createAppointment(input: CreateAppointmentInput) {
       if (client.status === "BLOCKED") throw new SchedulingError("Esta cliente está bloqueada para novos agendamentos.");
       if (!service || !resource) throw new SchedulingError("Serviço ou agenda indisponível.");
 
+      const timezone = settings?.timezone ?? DEFAULT_STUDIO_TIMEZONE;
+      const startsAt = dateInTimezone(input.date, input.time, timezone);
+      if (startsAt <= new Date()) throw new SchedulingError("Escolha um horário futuro.");
       const minimumNoticeHours = Math.max(settings?.minNoticeHours ?? 0, service.minAdvanceHours);
       if (startsAt.getTime() - Date.now() < minimumNoticeHours * 60 * 60 * 1000) throw new SchedulingError(`Este serviço exige pelo menos ${minimumNoticeHours} hora(s) de antecedência.`);
       const maximumAdvanceDays = Math.min(settings?.maxAdvanceDays ?? 90, service.maxAdvanceDays);
       if (startsAt.getTime() - Date.now() > maximumAdvanceDays * 24 * 60 * 60 * 1000) throw new SchedulingError(`Este serviço pode ser marcado com no máximo ${maximumAdvanceDays} dia(s) de antecedência.`);
 
-      const timezone = settings?.timezone ?? DEFAULT_STUDIO_TIMEZONE;
       const localDate = dateKeyInTimezone(startsAt, timezone);
       const timing = occupiedWindow(startsAt, service);
       const startMinute = Number(input.time.slice(0, 2)) * 60 + Number(input.time.slice(3, 5));
@@ -63,7 +64,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
         tx.appointment.findFirst({
           where: {
             resourceId: resource.id,
-            status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] },
+            status: { in: ACTIVE_APPOINTMENT_STATUSES },
             occupiedFrom: { lt: timing.occupiedUntil },
             occupiedUntil: { gt: timing.occupiedFrom },
           },

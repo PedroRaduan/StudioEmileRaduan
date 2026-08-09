@@ -13,7 +13,10 @@ export async function listClients(query?: string) {
         { phone: { contains: search } }, { whatsapp: { contains: search } }, { email: { contains: search, mode: "insensitive" } }, { cpf: { contains: search } },
       ] } : {}),
     },
-    include: { _count: { select: { appointments: true } } },
+    select: {
+      id: true, fullName: true, preferredName: true, whatsapp: true, phone: true, email: true,
+      lastAppointmentAt: true, status: true, _count: { select: { appointments: true } },
+    },
     orderBy: [{ lastAppointmentAt: "desc" }, { fullName: "asc" }],
     take: 100,
   });

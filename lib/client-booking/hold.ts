@@ -7,11 +7,11 @@ import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
 import { sha256 } from "@/lib/security/hash";
 import { BOOKING_HOLD_COOKIE } from "./availability";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export class BookingError extends Error {}
 
 export async function createBookingHold(input: { serviceId: string; date: string; time: string; clientId?: string }) {
-  const startsAt = dateInTimezone(input.date, input.time);
   const token = randomBytes(32).toString("base64url");
   const tokenHash = sha256(token);
   const previousToken = (await cookies()).get(BOOKING_HOLD_COOKIE)?.value;
@@ -30,6 +30,7 @@ export async function createBookingHold(input: { serviceId: string; date: string
       ]);
       if (!settings?.onlineBookingEnabled) throw new BookingError("O agendamento on-line está indisponível no momento.");
       if (!service || !resource) throw new BookingError("Este serviço não está disponível para agendamento on-line.");
+      const startsAt = dateInTimezone(input.date, input.time, settings.timezone);
       if (startsAt <= now) throw new BookingError("Escolha um horário futuro.");
       const minimumNoticeHours = Math.max(settings.minNoticeHours, service.minAdvanceHours);
       if (startsAt.getTime() - now.getTime() < minimumNoticeHours * 60 * 60 * 1000) throw new BookingError(`Este serviço exige ${minimumNoticeHours} hora(s) de antecedência.`);
@@ -48,7 +49,7 @@ export async function createBookingHold(input: { serviceId: string; date: string
         tx.availabilityException.findUnique({ where: { resourceId_date: { resourceId: resource.id, date: dateOnly } } }),
         tx.holiday.findUnique({ where: { date: dateOnly } }),
         tx.scheduleBlock.findFirst({ where: { resourceId: resource.id, startsAt: { lt: timing.occupiedUntil }, endsAt: { gt: timing.occupiedFrom } } }),
-        tx.appointment.findFirst({ where: { resourceId: resource.id, status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
+        tx.appointment.findFirst({ where: { resourceId: resource.id, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
         tx.bookingHold.findFirst({ where: { resourceId: resource.id, status: "ACTIVE", expiresAt: { gt: now }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
       ]);
       if (holiday?.isClosed || exception?.isClosed) throw new BookingError("A agenda está fechada nesta data.");
@@ -81,6 +82,15 @@ export async function getCurrentBookingHold() {
     return null;
   }
   return hold;
+}
+
+export async function getCompletedBookingHold() {
+  const token = (await cookies()).get(BOOKING_HOLD_COOKIE)?.value;
+  if (!token || !process.env.DATABASE_URL) return null;
+  return getPrisma().bookingHold.findFirst({
+    where: { tokenHash: sha256(token), status: "CONVERTED", convertedAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+    select: { id: true, clientId: true },
+  });
 }
 
 export async function releaseCurrentBookingHold() {

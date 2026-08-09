@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const worker = readFileSync(new URL("../public/admin-sw.js", import.meta.url), "utf8");
+const register = readFileSync(new URL("../components/pwa-register.tsx", import.meta.url), "utf8");
 
 describe("política de cache do PWA administrativo", () => {
   it("mantém navegações administrativas em modo network-only", () => {
@@ -19,5 +20,11 @@ describe("política de cache do PWA administrativo", () => {
   it("remove somente caches pertencentes ao próprio PWA", () => {
     expect(worker).toContain('key.startsWith(CACHE_PREFIX)');
     expect(worker).not.toContain("caches.delete(key))));\n  self.clients.claim");
+  });
+
+  it("não mantém service worker ativo durante o desenvolvimento", () => {
+    expect(register).toContain('process.env.NODE_ENV !== "production"');
+    expect(register).toContain('key.startsWith("emile-admin-shell-")');
+    expect(register).toContain("registration.unregister()");
   });
 });

@@ -7,8 +7,10 @@ import { sha256 } from "@/lib/security/hash";
 import { BOOKING_HOLD_COOKIE } from "./availability";
 import { BookingError } from "./hold";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
+import { normalizeBrazilianPhone } from "@/lib/clients/phone";
 
-export async function confirmBookingHold(input: { clientId: string }) {
+export async function confirmBookingHold(input: { clientId?: string; guest?: { fullName: string; whatsapp: string; email: string | null } }) {
   const cookieStore = await cookies();
   const token = cookieStore.get(BOOKING_HOLD_COOKIE)?.value;
   if (!token) throw new BookingError("Sua reserva temporária expirou. Escolha o horário novamente.");
@@ -21,10 +23,20 @@ export async function confirmBookingHold(input: { clientId: string }) {
       const hold = await tx.bookingHold.findUnique({ where: { tokenHash: sha256(token) }, include: { service: true } });
       if (!hold || hold.status !== "ACTIVE" || hold.expiresAt <= now) throw new BookingError("Sua reserva temporária expirou. Escolha o horário novamente.");
       if (hold.clientId && hold.clientId !== input.clientId) throw new BookingError("Esta reserva não pertence à sua conta.");
-      const client = await tx.client.findFirst({ where: { id: input.clientId, deletedAt: null } });
+      let client = input.clientId ? await tx.client.findFirst({ where: { id: input.clientId, deletedAt: null } }) : null;
+      if (!client && input.guest) {
+        const whatsappNormalized = normalizeBrazilianPhone(input.guest.whatsapp);
+        client = await tx.client.findFirst({ where: { deletedAt: null, OR: [
+          ...(input.guest.email ? [{ email: input.guest.email.toLowerCase() }] : []),
+          ...(whatsappNormalized ? [{ whatsappNormalized }, { phoneNormalized: whatsappNormalized }] : []),
+        ] } });
+        if (!client) {
+          client = await tx.client.create({ data: { fullName: input.guest.fullName, whatsapp: input.guest.whatsapp, phone: input.guest.whatsapp, whatsappNormalized, phoneNormalized: whatsappNormalized, email: input.guest.email?.toLowerCase() ?? null, source: "Agendamento on-line", contactPreference: "WHATSAPP" } });
+        }
+      }
       const settings = await tx.studioSettings.findUnique({ where: { id: "studio" } });
       if (!client || client.status === "BLOCKED") throw new BookingError("Não foi possível concluir on-line. Entre em contato com o studio.");
-      const conflict = await tx.appointment.findFirst({ where: { resourceId: hold.resourceId, status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] }, occupiedFrom: { lt: hold.occupiedUntil }, occupiedUntil: { gt: hold.occupiedFrom } } });
+      const conflict = await tx.appointment.findFirst({ where: { resourceId: hold.resourceId, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: hold.occupiedUntil }, occupiedUntil: { gt: hold.occupiedFrom } } });
       if (conflict) throw new BookingError("Este horário acabou de ser ocupado. Escolha outra opção.");
 
       const priceCents = hold.service.promotionalPriceCents ?? hold.service.priceCents;
@@ -49,6 +61,7 @@ export async function confirmBookingHold(input: { clientId: string }) {
           durationMinutes: hold.service.durationMinutes,
           priceCents,
           paymentStatus,
+          status: "AWAITING_CONFIRMATION",
           events: { create: { type: "CREATED", channel: "CLIENT", nextValue: { startsAt: hold.startsAt.toISOString(), serviceId: hold.serviceId, acceptedDocumentIds: latestDocuments.map((document) => document.id), policySnapshot: hold.service.cancellationPolicy ?? settings?.cancellationPolicy ?? null } } },
           payment: { create: { clientId: client.id, amountDueCents: priceCents, status: paymentStatus, depositRequired: hold.service.depositRequired, depositAmountCents } },
         },
@@ -59,7 +72,7 @@ export async function confirmBookingHold(input: { clientId: string }) {
       await tx.auditLog.create({ data: { action: "CLIENT_APPOINTMENT_CREATED", entityType: "Appointment", entityId: created.id, ipHash: hashIp(requestHeaders.get("x-forwarded-for")) } });
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 });
-    cookieStore.delete(BOOKING_HOLD_COOKIE);
+    cookieStore.set(BOOKING_HOLD_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", expires: new Date(Date.now() + 24 * 60 * 60 * 1000) });
     return appointment;
   } catch (error) {
     if (error instanceof BookingError) throw error;

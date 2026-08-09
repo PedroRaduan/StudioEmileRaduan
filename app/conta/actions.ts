@@ -10,6 +10,7 @@ import { isAuthRateLimited, recordAuthAttempt } from "@/lib/auth/rate-limit";
 import { createClientSession, destroyClientSession, requireClient, safeReturnTo } from "@/lib/client-auth/session";
 import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
+import { normalizeBrazilianPhone } from "@/lib/clients/phone";
 
 export type ClientAuthState = { error?: string; success?: string };
 
@@ -86,6 +87,8 @@ export async function clientSignupAction(_: ClientAuthState, formData: FormData)
           preferredName: parsed.data.preferredName,
           whatsapp: parsed.data.whatsapp,
           phone: parsed.data.whatsapp,
+          whatsappNormalized: normalizeBrazilianPhone(parsed.data.whatsapp),
+          phoneNormalized: normalizeBrazilianPhone(parsed.data.whatsapp),
           email: parsed.data.email,
           source: "Cadastro on-line",
           contactPreference: "WHATSAPP",
@@ -141,7 +144,7 @@ export async function updateClientProfileAction(_: ClientAuthState, formData: Fo
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise seus dados." };
   await getPrisma().client.update({
     where: { id: current.clientId },
-    data: { fullName: parsed.data.fullName, preferredName: parsed.data.preferredName, whatsapp: parsed.data.whatsapp, phone: parsed.data.whatsapp, contactPreference: parsed.data.contactPreference },
+    data: { fullName: parsed.data.fullName, preferredName: parsed.data.preferredName, whatsapp: parsed.data.whatsapp, phone: parsed.data.whatsapp, whatsappNormalized: normalizeBrazilianPhone(parsed.data.whatsapp), phoneNormalized: normalizeBrazilianPhone(parsed.data.whatsapp), contactPreference: parsed.data.contactPreference },
   });
   const communicationDocument = await getPrisma().document.findFirst({ where: { isActive: true, type: "COMMUNICATION" }, orderBy: { publishedAt: "desc" } });
   if (communicationDocument) await getPrisma().consent.create({ data: { clientId: current.clientId, documentId: communicationDocument.id, granted: parsed.data.communicationAccepted === "on", device: "Preferência atualizada na área da cliente" } });

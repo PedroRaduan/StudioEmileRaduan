@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { assertSameOrigin, requirePermission } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
+import { normalizeBrazilianPhone } from "@/lib/clients/phone";
 
 export type ClientFormState = { error?: string };
 
@@ -26,17 +27,34 @@ export async function createClientAction(_: ClientFormState, formData: FormData)
   let clientId: string;
   try {
     clientId = await getPrisma().$transaction(async (tx) => {
-      const client = await tx.client.create({ data: { ...parsed.data, birthDate: parsed.data.birthDate ? new Date(`${parsed.data.birthDate}T12:00:00Z`) : null } });
+      const phoneNormalized = normalizeBrazilianPhone(parsed.data.phone);
+      const whatsappNormalized = normalizeBrazilianPhone(parsed.data.whatsapp);
+      const duplicate = await tx.client.findFirst({
+        where: {
+          deletedAt: null,
+          OR: [
+            ...(parsed.data.email ? [{ email: parsed.data.email.toLowerCase() }] : []),
+            ...(phoneNormalized ? [{ phoneNormalized }, { whatsappNormalized: phoneNormalized }] : []),
+            ...(whatsappNormalized ? [{ phoneNormalized: whatsappNormalized }, { whatsappNormalized }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      if (duplicate) throw new DuplicateClientError();
+      const client = await tx.client.create({ data: { ...parsed.data, email: parsed.data.email?.toLowerCase() ?? null, phoneNormalized, whatsappNormalized, birthDate: parsed.data.birthDate ? new Date(`${parsed.data.birthDate}T12:00:00Z`) : null } });
       await tx.auditLog.create({ data: { userId: owner.id, action: "CLIENT_CREATED", entityType: "Client", entityId: client.id } });
       return client.id;
     });
   } catch (error) {
+    if (error instanceof DuplicateClientError) return { error: "Já existe uma cliente com este telefone, WhatsApp ou e-mail." };
     if (isUniqueError(error)) return { error: "Já existe uma cliente cadastrada com este e-mail." };
     return { error: "Não foi possível cadastrar a cliente. Tente novamente." };
   }
   revalidatePath("/admin/clientes"); revalidatePath("/admin");
   redirect(`/admin/clientes/${clientId}`);
 }
+
+class DuplicateClientError extends Error {}
 
 function isUniqueError(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";

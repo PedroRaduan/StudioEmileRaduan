@@ -12,7 +12,9 @@ function createPrismaClient() {
 
 export function getPrisma() {
   const prisma = globalForPrisma.prisma ?? createPrismaClient();
-
-  if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+  // O adapter PostgreSQL mantém um pool de conexões. Reutilizar a instância
+  // também em produção evita abrir um pool novo a cada chamada do mesmo
+  // processo/serverless isolate.
+  globalForPrisma.prisma = prisma;
   return prisma;
 }

@@ -30,6 +30,7 @@ enum ContactPreference {
 
 enum AppointmentStatus {
   SCHEDULED
+  AWAITING_CONFIRMATION
   CONFIRMED
   ARRIVED
   IN_SERVICE
@@ -174,6 +175,15 @@ model LoginAttempt {
   @@index([ipHash, createdAt])
 }
 
+model PublicRequest {
+  id        String   @id @default(cuid())
+  action    String
+  ipHash    String?
+  createdAt DateTime @default(now())
+
+  @@index([action, ipHash, createdAt])
+}
+
 model StudioSettings {
   id                    String   @id @default("studio")
   studioName            String   @default("Emile Raduan Beauty Face")
@@ -200,6 +210,7 @@ model StudioSettings {
   minNoticeHours        Int      @default(0)
   maxAdvanceDays        Int      @default(90)
   defaultSlotMinutes    Int      @default(15)
+  calendarSlotInterval  Int      @default(10)
   bookingHoldMinutes    Int      @default(10)
   cancellationHours     Int      @default(24)
   rescheduleHours       Int      @default(24)
@@ -230,6 +241,7 @@ model Service {
   durationMinutes        Int
   preparationMinutes     Int       @default(0)
   cleanupMinutes         Int       @default(0)
+  recommendedReturnDays  Int?
   priceCents             Int?
   promotionalPriceCents  Int?
   depositRequired        Boolean   @default(false)
@@ -259,7 +271,9 @@ model Client {
   preferredName         String?
   birthDate             DateTime?          @db.Date
   phone                 String?
+  phoneNormalized       String?
   whatsapp              String?
+  whatsappNormalized    String?
   email                 String?            @unique
   cpf                   String?            @unique
   instagram             String?
@@ -293,7 +307,9 @@ model Client {
 
   @@index([fullName])
   @@index([phone])
+  @@index([phoneNormalized])
   @@index([whatsapp])
+  @@index([whatsappNormalized])
   @@index([status, createdAt])
   @@index([lastAppointmentAt])
 }
@@ -352,6 +368,7 @@ model Appointment {
   importantNotes        String?
   internalNotes         String?
   cancellationReason    String?
+  confirmedAt           DateTime?
   cancelledAt           DateTime?
   completedAt           DateTime?
   client                Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)

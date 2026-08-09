@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "emile-admin-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v2`;
 const OFFLINE_URL = "/admin/offline";
 const STATIC_ASSETS = [OFFLINE_URL, "/icon-192.png", "/icon-512.png"];
 

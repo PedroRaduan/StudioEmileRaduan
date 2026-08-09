@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, CalendarPlus, ChartNoAxesCombined, ClipboardList, LogOut, Menu, Settings, Users, X } from "lucide-react";
+import { BarChart3, CalendarDays, CalendarPlus, ChartNoAxesCombined, ClipboardList, LogOut, Menu, Settings, Sparkles, Users, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/admin/(private)/actions";
 import { can, type Permission, type StaffRole } from "@/lib/auth/permissions";
@@ -19,7 +19,9 @@ type NavigationItem = {
 const links: NavigationItem[] = [
   { href: "/admin", label: "Visão geral", icon: ChartNoAxesCombined, exact: true },
   { href: "/admin/agenda", label: "Agenda", icon: CalendarDays },
+  { href: "/admin/agendamentos/novo", label: "Novo agendamento", icon: CalendarPlus, exact: true },
   { href: "/admin/clientes", label: "Clientes", icon: Users },
+  { href: "/admin/oportunidades", label: "Oportunidades", icon: Sparkles, permission: "CLIENTS_MANAGE" },
   { href: "/admin/servicos", label: "Serviços", icon: ClipboardList, permission: "SERVICES_MANAGE" },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3, permission: "REPORTS_VIEW" },
   { href: "/admin/configuracoes", label: "Configurações", icon: Settings, permission: "SETTINGS_MANAGE" },
@@ -32,6 +34,8 @@ export function AdminShell({ children, staffName, staffRole }: { children: React
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const visibleLinks = links.filter((link) => !link.permission || can(staffRole, link.permission));
+  const moreActive = ["/admin/oportunidades", "/admin/servicos", "/admin/relatorios", "/admin/configuracoes"].some((href) => pathname.startsWith(href));
+  const agendaActive = isNavigationActive(pathname, "/admin/agenda");
 
   useEffect(() => {
     const query = window.matchMedia("(max-width: 900px)");
@@ -71,8 +75,8 @@ export function AdminShell({ children, staffName, staffRole }: { children: React
         <div className="admin-brand"><span>{STUDIO_BRAND.wordmarkPrimary}</span><small>{STUDIO_BRAND.wordmarkSecondary}</small></div>
         <nav className="admin-nav">
           {visibleLinks.map(({ href, label, icon: Icon, exact }) => {
-            const active = exact ? pathname === href : pathname.startsWith(href);
-            return <Link className={active ? "active" : ""} href={href} key={href} onClick={() => setOpen(false)}><Icon size={18} aria-hidden="true" />{label}</Link>;
+            const active = isNavigationActive(pathname, href, exact);
+            return <Link aria-current={active ? "page" : undefined} className={active ? "active" : ""} href={href} key={href} onClick={() => setOpen(false)}><Icon size={18} aria-hidden="true" />{label}</Link>;
           })}
         </nav>
         <div className="sidebar-footer">
@@ -88,14 +92,20 @@ export function AdminShell({ children, staffName, staffRole }: { children: React
           <Link aria-label="Criar agendamento" href="/admin/agendamentos/novo"><CalendarPlus aria-hidden="true" size={21} /></Link>
         </header>
         {children}
-        <nav aria-label="Atalhos administrativos" className="admin-bottom-nav">
-          <Link className={pathname === "/admin" ? "active" : ""} href="/admin"><ChartNoAxesCombined aria-hidden="true" size={19} /><span>Início</span></Link>
-          <Link className={pathname.startsWith("/admin/agenda") ? "active" : ""} href="/admin/agenda"><CalendarDays aria-hidden="true" size={19} /><span>Agenda</span></Link>
-          <Link className="primary" href="/admin/agendamentos/novo"><CalendarPlus aria-hidden="true" size={21} /><span>Novo</span></Link>
-          <Link className={pathname.startsWith("/admin/clientes") ? "active" : ""} href="/admin/clientes"><Users aria-hidden="true" size={19} /><span>Clientes</span></Link>
-          <button aria-expanded={open} onClick={() => setOpen(true)} type="button"><Menu aria-hidden="true" size={19} /><span>Mais</span></button>
+        <nav aria-label="Navegação administrativa móvel" className="admin-mobile-dock">
+          <Link aria-current={pathname === "/admin" ? "page" : undefined} className={pathname === "/admin" ? "active" : ""} href="/admin"><ChartNoAxesCombined aria-hidden="true" size={19} /><span>Início</span></Link>
+          <Link aria-current={agendaActive ? "page" : undefined} className={agendaActive ? "active" : ""} href="/admin/agenda"><CalendarDays aria-hidden="true" size={19} /><span>Agenda</span></Link>
+          <Link aria-current={pathname === "/admin/agendamentos/novo" ? "page" : undefined} aria-label="Novo agendamento" className={`primary${pathname === "/admin/agendamentos/novo" ? " active" : ""}`} href="/admin/agendamentos/novo"><CalendarPlus aria-hidden="true" size={21} /><span>Agendar</span></Link>
+          <Link aria-current={pathname.startsWith("/admin/clientes") ? "page" : undefined} className={pathname.startsWith("/admin/clientes") ? "active" : ""} href="/admin/clientes"><Users aria-hidden="true" size={19} /><span>Clientes</span></Link>
+          <button aria-current={moreActive ? "page" : undefined} aria-expanded={open} className={moreActive ? "active" : ""} onClick={() => setOpen(true)} type="button"><Menu aria-hidden="true" size={19} /><span>Mais</span></button>
         </nav>
       </section>
     </div>
   );
+}
+
+function isNavigationActive(pathname: string, href: string, exact?: boolean) {
+  if (exact) return pathname === href;
+  if (href === "/admin/agenda" && pathname.startsWith("/admin/agendamentos/") && pathname !== "/admin/agendamentos/novo") return true;
+  return pathname === href || pathname.startsWith(`${href}/`);
 }

@@ -4,11 +4,12 @@ import { getAppointmentFormData } from "@/lib/admin/agenda";
 import { todayInTimezone } from "@/lib/date-time";
 import { AppointmentForm } from "./appointment-form";
 
-export default async function NewAppointmentPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
+export default async function NewAppointmentPage({ searchParams }: { searchParams: Promise<{ date?: string; time?: string; clientId?: string; resourceId?: string }> }) {
   const params = await searchParams;
-  const today = todayInTimezone();
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : today;
   const data = await getAppointmentFormData();
+  const today = todayInTimezone(data.timezone);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : today;
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(params.time ?? "") ? params.time! : "";
   const ready = data.clients.length && data.services.length && data.resources.length;
 
   return (
@@ -16,7 +17,7 @@ export default async function NewAppointmentPage({ searchParams }: { searchParam
       <Link className="back-link" href={`/admin/agenda?date=${date}`}><ArrowLeft aria-hidden="true" size={17} /> Voltar para agenda</Link>
       <div className="editor-heading"><p className="eyebrow">Novo agendamento</p><h1>Reserve um horário.</h1><p>O sistema verificará automaticamente conflitos e disponibilidade antes de salvar.</p></div>
       <section className="editor-card">
-        {ready ? <AppointmentForm {...data} date={date} minDate={today} /> : (
+        {ready ? <AppointmentForm {...data} date={date} minDate={today} time={time} selectedClientId={params.clientId} selectedResourceId={params.resourceId} /> : (
           <div className="setup-notice">
             <CalendarClock aria-hidden="true" size={24} />
             <h2>Antes de marcar o primeiro horário</h2>

@@ -19,6 +19,18 @@ export function PwaRegister() {
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
 
     const register = async () => {
+      if (process.env.NODE_ENV !== "production") {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations
+          .filter((registration) => registration.active?.scriptURL.endsWith("/admin-sw.js"))
+          .map((registration) => registration.unregister()));
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((key) => key.startsWith("emile-admin-shell-")).map((key) => caches.delete(key)));
+        }
+        return;
+      }
+
       // Remove apenas a versão antiga, que tinha escopo público. Nenhum outro
       // service worker ou cache da origem é tocado.
       const registrations = await navigator.serviceWorker.getRegistrations();

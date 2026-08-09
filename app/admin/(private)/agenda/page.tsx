@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { CalendarPlus, ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react";
 import { AgendaDatePicker } from "@/components/admin/agenda-date-picker";
-import { getAgendaForRange } from "@/lib/admin/agenda";
+import { DailyAgendaTimeline } from "@/components/admin/daily-agenda-timeline";
+import { getAgendaForDay, getAgendaForRange, getAgendaTimezone } from "@/lib/admin/agenda";
 import { dateKeyInTimezone, formatDate, formatTime, todayInTimezone } from "@/lib/date-time";
 
 type View = "day" | "week" | "month" | "list";
@@ -14,11 +15,13 @@ const views: Array<{ value: View; label: string }> = [
 
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ date?: string; view?: string; saved?: string }> }) {
   const params = await searchParams;
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayInTimezone();
+  const timezone = await getAgendaTimezone();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayInTimezone(timezone);
   const view = views.some((item) => item.value === params.view) ? params.view as View : "day";
   const range = dateRange(date, view);
-  const agenda = await getAgendaForRange(range.start, range.end);
-  const groups = groupAgenda(agenda.appointments, agenda.blocks);
+  const dailyAgenda = view === "day" ? await getAgendaForDay(date) : null;
+  const rangedAgenda = view === "day" ? null : await getAgendaForRange(range.start, range.end);
+  const groups = rangedAgenda ? groupAgenda(rangedAgenda.appointments, rangedAgenda.blocks) : [];
   const previous = shiftDate(date, view, -1);
   const next = shiftDate(date, view, 1);
 
@@ -36,9 +39,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         <Link aria-label="Período anterior" href={`/admin/agenda?date=${previous}&view=${view}`}><ChevronLeft aria-hidden="true" size={19} /></Link>
         <AgendaDatePicker date={date} view={view} />
         <Link aria-label="Próximo período" href={`/admin/agenda?date=${next}&view=${view}`}><ChevronRight aria-hidden="true" size={19} /></Link>
-        <Link className="today-link" href={`/admin/agenda?date=${todayInTimezone()}&view=${view}`}>Hoje</Link>
+        <Link className="today-link" href={`/admin/agenda?date=${todayInTimezone(timezone)}&view=${view}`}>Hoje</Link>
       </div>
-      {groups.length ? (
+      {dailyAgenda ? <DailyAgendaTimeline data={dailyAgenda} date={date} /> : groups.length ? (
         <div className="agenda-groups">
           {groups.map((group) => {
             const count = group.items.filter((item) => item.kind === "appointment").length;
@@ -112,7 +115,7 @@ function periodTitle(date: string, view: View) {
 }
 
 function statusLabel(status: string) {
-  return ({ SCHEDULED: "Agendado", CONFIRMED: "Confirmado", ARRIVED: "Chegou", IN_SERVICE: "Em atendimento", COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Falta" } as Record<string, string>)[status] ?? status;
+  return ({ SCHEDULED: "Agendado", AWAITING_CONFIRMATION: "Aguardando confirmação", CONFIRMED: "Confirmado", ARRIVED: "Chegou", IN_SERVICE: "Em atendimento", COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Falta" } as Record<string, string>)[status] ?? status;
 }
 
 function groupAgenda(appointments: Awaited<ReturnType<typeof getAgendaForRange>>["appointments"], blocks: Awaited<ReturnType<typeof getAgendaForRange>>["blocks"]) {

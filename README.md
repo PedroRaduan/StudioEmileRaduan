@@ -1,6 +1,6 @@
 # Emile Raduan Beauty Face
 
-Sistema de agenda e gestão para um único studio. O projeto possui página pública, agenda administrativa, cadastro de clientes, serviços, disponibilidade, pagamentos manuais, relatórios, permissões e um PWA exclusivo para a administração.
+Central operacional para um único studio de beleza. O projeto possui página pública, agenda administrativa, CRM de clientes, serviços, disponibilidade, pagamentos manuais, relatórios, permissões e um PWA exclusivo para a administração.
 
 Documentação técnica: [arquitetura, PWA e segurança](docs/visao-tecnica.md). Planejamento de longo prazo, sem funcionalidades SaaS ativas: [roadmap futuro](SAAS_FUTURE_ROADMAP.md).
 
@@ -9,16 +9,21 @@ Este guia foi escrito para quem está começando. Siga as etapas na ordem e não
 ## O que já está implementado
 
 - Agenda diária, semanal, mensal e em lista.
+- Grade diária por recurso/profissional, com intervalos de 5, 10, 15 ou 30 minutos.
+- Central operacional com ocupação, faturamento confirmado e previsto, confirmações pendentes, janelas livres e ações sugeridas.
+- Área de oportunidades: retorno recomendado, cancelamentos sem remarcação, primeira visita sem retorno e aniversariantes.
 - Criação, reagendamento, cancelamento e histórico de atendimentos.
 - Proteção contra dois agendamentos no mesmo horário.
 - Expediente semanal, intervalos, bloqueios e datas especiais.
 - Cadastro de clientes e informações sensíveis criptografadas.
-- Serviços, valores, duração, sinal e orientações editáveis.
+- Serviços, valores, duração, sinal, intervalo de retorno recomendado e orientações editáveis.
 - Registro manual de pagamentos e sinais.
 - Mensagens preparadas para WhatsApp, sem fingir uma automação ativa.
 - Relatórios operacionais e financeiros.
 - Controle de permissões para administradora e recepcionista.
-- Conta separada para clientes e autoagendamento opcional.
+- Autoagendamento sem obrigar a cliente a criar conta; o portal de cliente permanece opcional.
+- Normalização brasileira de telefone/WhatsApp e aviso de possível cliente duplicada.
+- Rate limit em login e mutações públicas de agendamento.
 - PWA administrativo instalável, tela sem conexão e cache restrito a arquivos estáticos não sensíveis.
 - Auditoria, termos versionados e solicitações relacionadas à LGPD.
 
@@ -41,6 +46,18 @@ Use esta lista como visão geral. As instruções detalhadas aparecem nas próxi
 - [ ] Preencher os dados reais do studio, serviços e horários.
 - [ ] Ativar e testar backups do banco.
 - [ ] Revisar termos, política de privacidade e política de cancelamento.
+
+## Como usar as evoluções operacionais
+
+1. Em **Serviços**, informe o campo **Retorno recomendado** para procedimentos recorrentes (por exemplo, 20 dias para manutenção de cílios).
+2. Ao concluir um atendimento, o sistema calcula a data de retorno e a cliente passa a aparecer em **Oportunidades** quando estiver no período correto e não tiver um novo horário.
+3. Use a tela **Agenda** para visualizar cada agenda/profissional em sua própria coluna. Em celular, as colunas são empilhadas para manter os alvos de toque confortáveis.
+4. Para agendamento público, a cliente escolhe serviço, data e horário e pode confirmar só com nome e WhatsApp. Não crie conta em nome da cliente; uma conta é opcional e serve apenas ao portal pessoal.
+5. Em caso de cancelamento, abra **Oportunidades** para localizar quem não remarcou e os retornos em aberto. A agenda mostra o valor potencial do cancelamento no painel de atenção quando ele acontece no dia seguinte.
+
+## Limites honestos desta versão
+
+O produto já funciona como central operacional para um studio, mas estes módulos ainda não estão ativos e não devem ser prometidos como prontos: lista de espera automática, arrastar-e-soltar para remarcação, pacotes/sessões, comissões, despesas/fechamento diário, upload de fotos, exportação/importação CSV, perfis de profissional com escopo próprio, integrações reais de WhatsApp/Pix/e-mail/SMS, IA generativa e multiempresa. O roteiro seguro para introduzi-los está em [SAAS_FUTURE_ROADMAP.md](SAAS_FUTURE_ROADMAP.md) e em [docs/integracoes-pendentes.md](docs/integracoes-pendentes.md). Não use respostas ou cobranças fictícias no lugar de uma integração contratada.
 
 > Nunca use o PostgreSQL do Docker como banco da versão publicada. O endereço `localhost` funciona somente no seu computador.
 
@@ -173,7 +190,7 @@ npx prisma validate
 Aplique todas as migrations:
 
 ```powershell
-npm run db:migrate
+npm run db:deploy
 ```
 
 Crie apenas as configurações estruturais iniciais, sem clientes, serviços ou agendamentos fictícios:
@@ -340,7 +357,7 @@ Em **Project → Settings → Build and Deployment**, use:
 npm run build
 ```
 
-Esse comando aplica migrations pendentes com `prisma migrate deploy` e depois compila o sistema. Não use `prisma migrate dev` em produção.
+Esse comando somente compila e valida a aplicação. Migrations são uma etapa deliberada e devem ser aplicadas antes do deploy com `npm run db:deploy`, contra o banco do ambiente correto. Não use `prisma migrate dev` em produção.
 
 Mantenha:
 
@@ -509,8 +526,9 @@ Confira, nesta ordem:
 2. `DATABASE_URL` de produção;
 3. `SESSION_SECRET`;
 4. `SENSITIVE_DATA_KEY`;
-5. Build Command `npm run build` (as migrations já são aplicadas automaticamente antes da compilação);
-6. novo deploy depois de salvar variáveis.
+5. migrations aplicadas previamente com `npm run db:deploy` contra o banco de produção;
+6. Build Command `npm run build`;
+7. novo deploy depois de salvar variáveis.
 
 ### O site publicou, mas a administração não abre
 
@@ -542,7 +560,7 @@ npm audit --omit=dev
 
 # Banco
 npx prisma validate
-npm run db:migrate
+npm run db:deploy
 npm run db:seed
 
 # Docker local

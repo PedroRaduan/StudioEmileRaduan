@@ -9,6 +9,7 @@ import { hashPassword } from "@/lib/auth/password";
 import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
 import { encryptSensitiveData } from "@/lib/security/sensitive-data";
+import { normalizeBrazilianPhone } from "@/lib/clients/phone";
 
 export type ClientProfileState = { error?: string; success?: string; link?: string };
 
@@ -34,13 +35,29 @@ export async function updateClientDetailsAction(_: ClientProfileState, formData:
   const before = await prisma.client.findFirst({ where: { id: clientId, deletedAt: null }, include: { account: { select: { id: true } } } });
   if (!before) return { error: "Cliente não encontrada." };
   const normalizedEmail = email?.toLowerCase() ?? null;
+  const phoneNormalized = normalizeBrazilianPhone(details.phone);
+  const whatsappNormalized = normalizeBrazilianPhone(details.whatsapp);
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.client.update({ where: { id: clientId }, data: { ...details, email: normalizedEmail, birthDate: birthDate ? new Date(`${birthDate}T12:00:00Z`) : null } });
+      const duplicate = await tx.client.findFirst({
+        where: {
+          id: { not: clientId },
+          deletedAt: null,
+          OR: [
+            ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+            ...(phoneNormalized ? [{ phoneNormalized }, { whatsappNormalized: phoneNormalized }] : []),
+            ...(whatsappNormalized ? [{ phoneNormalized: whatsappNormalized }, { whatsappNormalized }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      if (duplicate) throw new DuplicateClientError();
+      await tx.client.update({ where: { id: clientId }, data: { ...details, email: normalizedEmail, phoneNormalized, whatsappNormalized, birthDate: birthDate ? new Date(`${birthDate}T12:00:00Z`) : null } });
       if (before.account && normalizedEmail) await tx.clientAccount.update({ where: { id: before.account.id }, data: { email: normalizedEmail } });
       await tx.auditLog.create({ data: { userId: staff.id, action: "CLIENT_UPDATED", entityType: "Client", entityId: clientId, before: { fullName: before.fullName, preferredName: before.preferredName, whatsapp: before.whatsapp, phone: before.phone, email: before.email, city: before.city, state: before.state }, after: { ...details, email: normalizedEmail, birthDate } } });
     });
   } catch (error) {
+    if (error instanceof DuplicateClientError) return { error: "Já existe uma cliente com este telefone, WhatsApp ou e-mail." };
     if (typeof error === "object" && error !== null && "code" in error && String(error.code) === "P2002") return { error: "Este e-mail já está vinculado a outro cadastro." };
     return { error: "Não foi possível atualizar a cliente. Tente novamente." };
   }
@@ -48,6 +65,8 @@ export async function updateClientDetailsAction(_: ClientProfileState, formData:
   revalidatePath("/admin/clientes");
   return { success: "Dados da cliente atualizados." };
 }
+
+class DuplicateClientError extends Error {}
 
 export async function prepareClientAccessAction(_: ClientProfileState, formData: FormData): Promise<ClientProfileState> {
   await assertSameOrigin();

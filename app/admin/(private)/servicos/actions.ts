@@ -19,6 +19,7 @@ const serviceSchema = z.object({
   name: z.string().trim().min(2, "Informe o nome do serviço.").max(140),
   shortDescription: optionalText(300), fullDescription: optionalText(4000),
   durationMinutes: intFromForm(5, 720), preparationMinutes: intFromForm(0, 240), cleanupMinutes: intFromForm(0, 240),
+  recommendedReturnDays: z.union([z.literal(""), intFromForm(1, 730)]).transform((value) => value === "" ? null : value),
   price: money(), promotionalPrice: money(), displayOrder: intFromForm(0, 9999), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Escolha uma cor válida."),
   minAdvanceHours: intFromForm(0, 720), maxAdvanceDays: intFromForm(1, 365),
   depositType: z.enum(["FIXED", "PERCENT"]).optional(), depositValue: z.string().trim().optional(),
@@ -39,6 +40,7 @@ function serviceData(formData: FormData) {
   return { data: {
     name: parsed.data.name, shortDescription: parsed.data.shortDescription, fullDescription: parsed.data.fullDescription,
     durationMinutes: parsed.data.durationMinutes, preparationMinutes: parsed.data.preparationMinutes, cleanupMinutes: parsed.data.cleanupMinutes,
+    recommendedReturnDays: parsed.data.recommendedReturnDays,
     priceCents: parsed.data.price, promotionalPriceCents: parsed.data.promotionalPrice, displayOrder: parsed.data.displayOrder,
     calendarColor: parsed.data.color, isOnlineAvailable: formData.get("showPublicly") === "on", isActive: formData.get("isActive") === "on",
     minAdvanceHours: parsed.data.minAdvanceHours, maxAdvanceDays: parsed.data.maxAdvanceDays,

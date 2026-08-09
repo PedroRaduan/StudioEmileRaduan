@@ -3,6 +3,7 @@ import { dateInTimezone, dateKeyInTimezone, weekdayInTimezone } from "@/lib/date
 import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
 import { generateAvailableSlots } from "./slot-rules";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export { generateAvailableSlots, type AvailableSlot } from "./slot-rules";
 
@@ -31,7 +32,7 @@ export async function getAvailableSlots(serviceId: string, date: string) {
     prisma.availabilityRule.findUnique({ where: { resourceId_dayOfWeek: { resourceId: resource.id, dayOfWeek: weekday } } }),
     prisma.availabilityException.findUnique({ where: { resourceId_date: { resourceId: resource.id, date: dayStart } } }),
     prisma.holiday.findUnique({ where: { date: dayStart } }),
-    prisma.appointment.findMany({ where: { resourceId: resource.id, status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] }, occupiedFrom: { lt: dayEnd }, occupiedUntil: { gt: dayStart } }, select: { occupiedFrom: true, occupiedUntil: true } }),
+    prisma.appointment.findMany({ where: { resourceId: resource.id, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: dayEnd }, occupiedUntil: { gt: dayStart } }, select: { occupiedFrom: true, occupiedUntil: true } }),
     prisma.scheduleBlock.findMany({ where: { resourceId: resource.id, startsAt: { lt: dayEnd }, endsAt: { gt: dayStart } }, select: { startsAt: true, endsAt: true } }),
     prisma.bookingHold.findMany({ where: { resourceId: resource.id, status: "ACTIVE", expiresAt: { gt: new Date() }, ...(currentHold ? { tokenHash: { not: sha256(currentHold) } } : {}), occupiedFrom: { lt: dayEnd }, occupiedUntil: { gt: dayStart } }, select: { occupiedFrom: true, occupiedUntil: true } }),
   ]);

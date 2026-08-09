@@ -6,6 +6,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { dateInTimezone } from "@/lib/date-time";
 import { assertSameOrigin, requirePermission } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export type AvailabilityFormState = { error?: string; success?: string };
 
@@ -24,15 +25,15 @@ export async function createBlockAction(_: AvailabilityFormState, formData: Form
   const owner = await requirePermission("SETTINGS_MANAGE");
   const parsed = blockSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise o bloqueio." };
-  const period = safePeriod(parsed.data.date, parsed.data.startsAt, parsed.data.endsAt);
-  if (!period) return { error: "Informe uma data e horários válidos." };
-  const { startsAt, endsAt } = period;
-  if (endsAt <= startsAt) return { error: "O término precisa ser posterior ao início." };
   const prisma = getPrisma();
   try {
     await prisma.$transaction(async (tx) => {
+      const settings = await tx.studioSettings.findUnique({ where: { id: "studio" }, select: { timezone: true } });
+      const period = safePeriod(parsed.data.date, parsed.data.startsAt, parsed.data.endsAt, settings?.timezone);
+      if (!period || period.endsAt <= period.startsAt) throw new Error("INVALID_PERIOD");
+      const { startsAt, endsAt } = period;
       const [conflict, activeHold] = await Promise.all([
-        tx.appointment.findFirst({ where: { resourceId: parsed.data.resourceId, status: { in: ["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE"] }, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt } } }),
+        tx.appointment.findFirst({ where: { resourceId: parsed.data.resourceId, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt } } }),
         tx.bookingHold.findFirst({ where: { resourceId: parsed.data.resourceId, status: "ACTIVE", expiresAt: { gt: new Date() }, occupiedFrom: { lt: endsAt }, occupiedUntil: { gt: startsAt } } }),
       ]);
       if (conflict) throw new Error("APPOINTMENT_CONFLICT");
@@ -43,6 +44,7 @@ export async function createBlockAction(_: AvailabilityFormState, formData: Form
     refreshAvailability();
     return { success: "Horário bloqueado. Novos agendamentos serão impedidos nesse período." };
   } catch (error) {
+    if (error instanceof Error && error.message === "INVALID_PERIOD") return { error: "Informe uma data e horários válidos." };
     if (error instanceof Error && error.message === "APPOINTMENT_CONFLICT") return { error: "Já existe um atendimento nesse período. Reagende-o antes de bloquear." };
     if (error instanceof Error && error.message === "ACTIVE_HOLD_CONFLICT") return { error: "Uma cliente está concluindo uma reserva nesse horário. Aguarde alguns minutos e tente novamente." };
     if (typeof error === "object" && error !== null && "code" in error && String(error.code) === "P2034") return { error: "A agenda mudou durante o bloqueio. Confira os horários e tente novamente." };
@@ -67,9 +69,10 @@ export async function saveExceptionAction(_: AvailabilityFormState, formData: Fo
   const startsAtMinute = !isClosed && parsed.data.startsAt && timePattern.test(parsed.data.startsAt) ? toMinutes(parsed.data.startsAt) : null;
   const endsAtMinute = !isClosed && parsed.data.endsAt && timePattern.test(parsed.data.endsAt) ? toMinutes(parsed.data.endsAt) : null;
   if (!isClosed && (startsAtMinute === null || endsAtMinute === null || endsAtMinute <= startsAtMinute)) return { error: "Para horário especial, informe início e fim válidos." };
-  const date = safeDate(parsed.data.date);
-  if (!date) return { error: "Informe uma data válida." };
   const prisma = getPrisma();
+  const settings = await prisma.studioSettings.findUnique({ where: { id: "studio" }, select: { timezone: true } });
+  const date = safeDate(parsed.data.date, settings?.timezone);
+  if (!date) return { error: "Informe uma data válida." };
   const exception = await prisma.availabilityException.upsert({ where: { resourceId_date: { resourceId: parsed.data.resourceId, date } }, create: { resourceId: parsed.data.resourceId, date, startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note }, update: { startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note } });
   await prisma.auditLog.create({ data: { userId: owner.id, action: "AVAILABILITY_EXCEPTION_SAVED", entityType: "AvailabilityException", entityId: exception.id, after: { date: parsed.data.date, isClosed, startsAtMinute, endsAtMinute } } });
   refreshAvailability();
@@ -103,16 +106,16 @@ export async function deleteExceptionAction(formData: FormData) {
 }
 
 function toMinutes(time: string) { const [hours, minutes] = time.split(":").map(Number); return hours * 60 + minutes; }
-function safeDate(date: string) {
+function safeDate(date: string, timezone?: string) {
   try {
-    return dateInTimezone(date, "00:00");
+    return dateInTimezone(date, "00:00", timezone);
   } catch {
     return null;
   }
 }
-function safePeriod(date: string, startsAt: string, endsAt: string) {
+function safePeriod(date: string, startsAt: string, endsAt: string, timezone?: string) {
   try {
-    return { startsAt: dateInTimezone(date, startsAt), endsAt: dateInTimezone(date, endsAt) };
+    return { startsAt: dateInTimezone(date, startsAt, timezone), endsAt: dateInTimezone(date, endsAt, timezone) };
   } catch {
     return null;
   }

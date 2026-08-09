@@ -13,7 +13,7 @@ import { CURRENT_STUDIO_ID, STUDIO_BRAND } from "@/lib/studio-config";
 
 export type AppointmentActionState = { error?: string; success?: string };
 
-const statusSchema = z.object({ appointmentId: z.string().cuid(), status: z.enum(["SCHEDULED", "CONFIRMED", "ARRIVED", "IN_SERVICE", "COMPLETED", "NO_SHOW"]) });
+const statusSchema = z.object({ appointmentId: z.string().cuid(), status: z.enum(["SCHEDULED", "AWAITING_CONFIRMATION", "CONFIRMED", "ARRIVED", "IN_SERVICE", "COMPLETED", "NO_SHOW"]) });
 
 export async function updateAppointmentStatusAction(_: AppointmentActionState, formData: FormData): Promise<AppointmentActionState> {
   await assertSameOrigin();
@@ -21,13 +21,13 @@ export async function updateAppointmentStatusAction(_: AppointmentActionState, f
   const parsed = statusSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Selecione um status válido." };
   const prisma = getPrisma();
-  const appointment = await prisma.appointment.findUnique({ where: { id: parsed.data.appointmentId } });
+  const appointment = await prisma.appointment.findUnique({ where: { id: parsed.data.appointmentId }, include: { service: { select: { recommendedReturnDays: true } } } });
   if (!appointment) return { error: "Agendamento não encontrado." };
   if (appointment.status === "CANCELED") return { error: "Um atendimento cancelado não pode ter o status alterado." };
   if (appointment.status === parsed.data.status) return { success: "O status já estava atualizado." };
   await prisma.$transaction([
-    prisma.appointment.update({ where: { id: appointment.id }, data: { status: parsed.data.status, completedAt: parsed.data.status === "COMPLETED" ? new Date() : null } }),
-    ...(parsed.data.status === "COMPLETED" ? [prisma.client.update({ where: { id: appointment.clientId }, data: { lastAppointmentAt: new Date(), status: "ACTIVE" } })] : []),
+    prisma.appointment.update({ where: { id: appointment.id }, data: { status: parsed.data.status, completedAt: parsed.data.status === "COMPLETED" ? new Date() : null, confirmedAt: parsed.data.status === "CONFIRMED" ? appointment.confirmedAt ?? new Date() : appointment.confirmedAt } }),
+    ...(parsed.data.status === "COMPLETED" ? [prisma.client.update({ where: { id: appointment.clientId }, data: { lastAppointmentAt: new Date(), returnRecommendedAt: appointment.service.recommendedReturnDays ? new Date(Date.now() + appointment.service.recommendedReturnDays * 24 * 60 * 60 * 1000) : null, status: "ACTIVE" } })] : []),
     prisma.appointmentEvent.create({ data: { appointmentId: appointment.id, actorUserId: staff.id, type: "STATUS_CHANGED", previousValue: { status: appointment.status }, nextValue: { status: parsed.data.status } } }),
     prisma.auditLog.create({ data: { userId: staff.id, action: "APPOINTMENT_STATUS_CHANGED", entityType: "Appointment", entityId: appointment.id, before: { status: appointment.status }, after: { status: parsed.data.status } } }),
   ]);

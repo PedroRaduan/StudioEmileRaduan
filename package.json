@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "npm run db:migrate && npm run build:application",
+    "build": "npm run build:application",
     "build:application": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint . --ignore-pattern .next --ignore-pattern app/generated",
@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
+    "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed"
   },
   "dependencies": {

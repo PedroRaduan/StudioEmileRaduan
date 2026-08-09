@@ -40,6 +40,6 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
 }
 
 function statusLabel(status: string) { return ({ NEW: "Cliente nova", ACTIVE: "Cliente ativa", RECURRING: "Cliente recorrente", INACTIVE: "Cliente inativa", BLOCKED: "Cliente bloqueada", FOLLOW_UP_DUE: "Retorno pendente", PAYMENT_DUE: "Pagamento pendente" } as Record<string, string>)[status] ?? status; }
-function appointmentStatus(status: string) { return ({ COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Não compareceu", CONFIRMED: "Confirmado", ARRIVED: "Cliente chegou", IN_SERVICE: "Em atendimento", SCHEDULED: "Agendado" } as Record<string, string>)[status] ?? status; }
+function appointmentStatus(status: string) { return ({ COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Não compareceu", AWAITING_CONFIRMATION: "Aguardando confirmação", CONFIRMED: "Confirmado", ARRIVED: "Cliente chegou", IN_SERVICE: "Em atendimento", SCHEDULED: "Agendado" } as Record<string, string>)[status] ?? status; }
 function privacyType(type: string) { return ({ EXPORT: "Exportação de dados", CORRECTION: "Correção de dados", DELETION: "Exclusão dos dados" } as Record<string, string>)[type] ?? type; }
 function privacyStatus(status: string) { return ({ OPEN: "Aberta", IN_PROGRESS: "Em análise", COMPLETED: "Concluída", DECLINED: "Recusada" } as Record<string, string>)[status] ?? status; }

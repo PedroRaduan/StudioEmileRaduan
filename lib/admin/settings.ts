@@ -8,6 +8,14 @@ export async function getStudioSettings() {
   return getPrisma().studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } });
 }
 
+export async function getCalendarSettings() {
+  await requirePermission("SETTINGS_MANAGE");
+  return getPrisma().studioSettings.findUnique({
+    where: { id: CURRENT_STUDIO_ID },
+    select: { calendarSlotInterval: true },
+  });
+}
+
 export async function getPrimaryResource() {
   await requirePermission("SETTINGS_MANAGE");
   return getPrisma().calendarResource.findFirst({ where: { isActive: true }, include: { availabilityRules: { orderBy: { dayOfWeek: "asc" } } }, orderBy: { createdAt: "asc" } });

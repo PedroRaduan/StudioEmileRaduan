@@ -4,7 +4,7 @@ import { requireClient } from "@/lib/client-auth/session";
 import { formatDate, formatTime } from "@/lib/date-time";
 import { getPrisma } from "@/lib/db/prisma";
 
-const statusLabels: Record<string, string> = { SCHEDULED: "Aguardando confirmação", CONFIRMED: "Confirmado", ARRIVED: "Chegada registrada", IN_SERVICE: "Em atendimento", COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Não compareceu" };
+const statusLabels: Record<string, string> = { SCHEDULED: "Agendado", AWAITING_CONFIRMATION: "Aguardando confirmação", CONFIRMED: "Confirmado", ARRIVED: "Chegada registrada", IN_SERVICE: "Em atendimento", COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Não compareceu" };
 
 export default async function ClientDashboardPage() {
   const current = await requireClient();
