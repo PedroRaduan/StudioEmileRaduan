@@ -1,12 +1,22 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/app/generated/prisma/client";
 import { enforcePostgresCertificateVerification } from "@/lib/db/postgres-url";
-import { requireTenantContext } from "@/lib/tenancy/context";
+import { requireTenantContext, runWithTenant } from "@/lib/tenancy/context";
 
 type TenantQueryArgs = Record<string, unknown> & {
   where?: Record<string, unknown>;
   data?: Record<string, unknown> | Array<Record<string, unknown>>;
 };
+
+type UnscopedModelDelegate = {
+  findFirst(args: { where: Record<string, unknown>; select: { id: true } }): Promise<{ id: string } | null>;
+};
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
 
 const tenantModels = new Set([
   "StudioSettings", "ServiceCategory", "Service", "Client", "ClientHealthProfile", "ClientNote",
@@ -27,6 +37,16 @@ function scopeWhere(where: Record<string, unknown> | undefined, organizationId: 
   return where ? { AND: [where, { organizationId }] } : { organizationId };
 }
 
+function scopeUniqueWhere(where: Record<string, unknown> | undefined, organizationId: string): Record<string, unknown> | undefined {
+  if (!where) return where;
+  const scopeValue = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(scopeValue);
+    if (!isPlainRecord(value)) return value;
+    return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, key === "organizationId" ? organizationId : scopeValue(nested)]));
+  };
+  return scopeValue(where) as Record<string, unknown>;
+}
+
 function scopeData(data: TenantQueryArgs["data"], organizationId: string) {
   if (Array.isArray(data)) return data.map((item) => ({ ...item, organizationId }));
   return data ? { ...data, organizationId } : data;
@@ -34,8 +54,8 @@ function scopeData(data: TenantQueryArgs["data"], organizationId: string) {
 
 function scopeNestedCreates(value: unknown, organizationId: string): unknown {
   if (Array.isArray(value)) return value.map((item) => scopeNestedCreates(item, organizationId));
-  if (!value || typeof value !== "object") return value;
-  const record = value as Record<string, unknown>;
+  if (!isPlainRecord(value)) return value;
+  const record = value;
   const result: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(record)) {
     if (key === "create") {
@@ -66,7 +86,12 @@ function scopeNestedCreates(value: unknown, organizationId: string): unknown {
 
 function scopeTenantQuery(args: unknown, operation: string, organizationId: string): unknown {
   const scoped = { ...(args as TenantQueryArgs) };
-  if (operation !== "create" && operation !== "createMany") {
+  if (["findUnique", "findUniqueOrThrow", "update", "updateOrThrow", "delete", "deleteOrThrow", "upsert"].includes(operation)) {
+    // Operações por chave única não aceitam um `AND` no Prisma. Quando a
+    // chave já contém organizationId, ela é sempre substituída pelo tenant
+    // autenticado; as demais são verificadas antes da execução no extension.
+    scoped.where = scopeUniqueWhere(scoped.where, organizationId);
+  } else if (operation !== "create" && operation !== "createMany") {
     scoped.where = scopeWhere(scoped.where, organizationId);
   }
   if (["create", "createMany", "update", "updateMany", "upsert"].includes(operation)) {
@@ -82,6 +107,26 @@ function scopeTenantQuery(args: unknown, operation: string, organizationId: stri
   return scoped;
 }
 
+function modelDelegateName(model: string) {
+  return `${model[0].toLowerCase()}${model.slice(1)}`;
+}
+
+async function tenantRecordExists(client: PrismaClient, model: string, where: Record<string, unknown> | undefined, organizationId?: string) {
+  if (!where) return null;
+  const delegate = (client as unknown as Record<string, UnscopedModelDelegate>)[modelDelegateName(model)];
+  if (!delegate) throw new Error(`Modelo tenantizado desconhecido: ${model}`);
+  return delegate.findFirst({ where: organizationId ? scopeWhere(where, organizationId) : where, select: { id: true } });
+}
+
+class TenantAccessDeniedError extends Error {
+  constructor() {
+    super("O recurso solicitado não pertence à organização ativa.");
+    this.name = "TenantAccessDeniedError";
+  }
+}
+
+const uniqueTenantOperations = new Set(["findUnique", "findUniqueOrThrow", "update", "updateOrThrow", "delete", "deleteOrThrow", "upsert"]);
+
 function createTenantPrisma(client: PrismaClient) {
   return client.$extends({
     name: "tenant-isolation",
@@ -89,8 +134,21 @@ function createTenantPrisma(client: PrismaClient) {
       $allModels: {
         async $allOperations({ model, operation, args, query }) {
           if (!tenantModels.has(model)) return query(args);
-          const { organizationId } = requireTenantContext();
-          return query(scopeTenantQuery(args, operation, organizationId) as never);
+          const context = await requireTenantContext();
+          const tenantArgs = args as TenantQueryArgs;
+          if (uniqueTenantOperations.has(operation)) {
+            const ownRecord = await tenantRecordExists(client, model, tenantArgs.where, context.organizationId);
+            if (!ownRecord) {
+              if (operation === "findUnique") return null;
+              if (operation === "upsert") {
+                const existingRecord = await tenantRecordExists(client, model, tenantArgs.where);
+                if (existingRecord) throw new TenantAccessDeniedError();
+              } else {
+                throw new TenantAccessDeniedError();
+              }
+            }
+          }
+          return runWithTenant(context, () => query(scopeTenantQuery(args, operation, context.organizationId) as never));
         },
       },
     },

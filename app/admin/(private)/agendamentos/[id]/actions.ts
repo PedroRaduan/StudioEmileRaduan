@@ -120,7 +120,7 @@ export async function prepareWhatsappAction(_: AppointmentActionState, formData:
   const [appointment, template, settings] = await Promise.all([
     prisma.appointment.findUnique({ where: { id: appointmentId.data }, include: { client: true, service: true } }),
     prisma.messageTemplate.findFirst({ where: { channel: "WHATSAPP", isActive: true, name: { contains: "confirma", mode: "insensitive" } }, orderBy: { updatedAt: "desc" } }),
-    prisma.studioSettings.findUnique({ where: { organizationId: requireTenantContext().organizationId } }),
+    prisma.studioSettings.findUnique({ where: { organizationId: (await requireTenantContext()).organizationId } }),
   ]);
   if (!appointment?.client.whatsapp) return { error: "Cadastre o WhatsApp da cliente antes de preparar a mensagem." };
   const fallback = "Olá, {nome}. Seu horário para {servico} está marcado para {data}, às {horario}.";

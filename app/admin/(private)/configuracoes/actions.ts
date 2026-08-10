@@ -29,8 +29,8 @@ export async function saveSettingsAction(_: SettingsFormState, formData: FormDat
   if (!parsed.success) return { error: "Revise as informações do studio." };
   try {
     await getPrisma().$transaction([
-      getPrisma().studioSettings.upsert({ where: { organizationId: requireTenantContext().organizationId }, create: { ...parsed.data }, update: parsed.data }),
-      getPrisma().auditLog.create({ data: { userId: owner.id, action: "SETTINGS_UPDATED", entityType: "StudioSettings", entityId: requireTenantContext().organizationId } }),
+      getPrisma().studioSettings.upsert({ where: { organizationId: (await requireTenantContext()).organizationId }, create: { ...parsed.data }, update: parsed.data }),
+      getPrisma().auditLog.create({ data: { userId: owner.id, action: "SETTINGS_UPDATED", entityType: "StudioSettings", entityId: (await requireTenantContext()).organizationId } }),
     ]);
     revalidatePath("/"); revalidatePath("/agendar"); revalidatePath("/admin/configuracoes");
     return { success: "Configurações salvas." };
@@ -57,7 +57,7 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
     const prisma = getPrisma();
     await prisma.$transaction([
       prisma.studioSettings.upsert({
-        where: { organizationId: requireTenantContext().organizationId },
+        where: { organizationId: (await requireTenantContext()).organizationId },
         create: { calendarSlotInterval: parsed.data.calendarSlotInterval },
         update: { calendarSlotInterval: parsed.data.calendarSlotInterval },
       }),
@@ -66,7 +66,7 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
           userId: owner.id,
           action: "CALENDAR_GRID_UPDATED",
           entityType: "StudioSettings",
-          entityId: requireTenantContext().organizationId,
+          entityId: (await requireTenantContext()).organizationId,
           after: { calendarSlotInterval: parsed.data.calendarSlotInterval },
         },
       }),
@@ -80,7 +80,7 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
 }
 
 export async function saveHoursAction(_: SettingsFormState, formData: FormData): Promise<SettingsFormState> {
-  await assertSameOrigin(); const owner = await requireOwner(); const prisma = getPrisma(); const organizationId = requireTenantContext().organizationId; const resourceId = String(formData.get("resourceId") ?? "");
+  await assertSameOrigin(); const owner = await requireOwner(); const prisma = getPrisma(); const organizationId = (await requireTenantContext()).organizationId; const resourceId = String(formData.get("resourceId") ?? "");
   const resource = await prisma.calendarResource.findFirst({ where: { id: resourceId, isActive: true } });
   if (!resource) return { error: "Agenda não encontrada." };
   const rules = [];

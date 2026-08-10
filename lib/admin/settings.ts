@@ -5,13 +5,15 @@ import { requireTenantContext } from "@/lib/tenancy/context";
 
 export async function getStudioSettings() {
   await requirePermission("SETTINGS_MANAGE");
-  return getPrisma().studioSettings.findUnique({ where: { organizationId: requireTenantContext().organizationId } });
+  const { organizationId } = await requireTenantContext();
+  return getPrisma().studioSettings.findUnique({ where: { organizationId } });
 }
 
 export async function getCalendarSettings() {
   await requirePermission("SETTINGS_MANAGE");
+  const { organizationId } = await requireTenantContext();
   return getPrisma().studioSettings.findUnique({
-    where: { organizationId: requireTenantContext().organizationId },
+    where: { organizationId },
     select: { calendarSlotInterval: true },
   });
 }

@@ -23,7 +23,7 @@ export type CreateAppointmentInput = {
 
 export async function createAppointment(input: CreateAppointmentInput) {
   const prisma = getPrisma();
-  const { organizationId } = requireTenantContext();
+  const { organizationId } = await requireTenantContext();
 
   try {
     return await prisma.$transaction(async (tx) => {

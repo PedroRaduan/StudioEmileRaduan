@@ -10,7 +10,7 @@ import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export async function rescheduleAppointment(input: { appointmentId: string; date: string; time: string; reason: string; actorUserId: string }) {
   const prisma = getPrisma();
-  const { organizationId } = requireTenantContext();
+  const { organizationId } = await requireTenantContext();
 
   try {
     return await prisma.$transaction(async (tx) => {

@@ -25,12 +25,30 @@ export function getTenantContext() {
   return storage.getStore();
 }
 
-export function requireTenantContext() {
+/**
+ * O layout e seus filhos podem ser renderizados em cadeias assíncronas
+ * independentes pelos Server Components. Por isso, um `enterWith` feito no
+ * layout não pode ser a única fonte do tenant para uma query filha.
+ */
+export async function requireTenantContext(): Promise<TenantContext> {
   const context = getTenantContext();
-  if (!context) throw new MissingTenantContextError();
-  return context;
+  if (context) return context;
+
+  // A importação dinâmica evita um ciclo estático: a autenticação consulta o
+  // Prisma de sistema, que não aplica o escopo tenantizado.
+  const { getCurrentUser } = await import("@/lib/auth/session");
+  const user = await getCurrentUser();
+  if (!user) throw new MissingTenantContextError();
+
+  return {
+    organizationId: user.organizationId,
+    membershipId: user.membershipId,
+    role: user.role,
+  };
 }
 
-export function runWithTenant<T>(context: TenantContext, operation: () => Promise<T>) {
-  return storage.run(context, operation);
+export async function runWithTenant<T>(context: TenantContext, operation: () => T | Promise<T>): Promise<T> {
+  // PrismaPromise é lazy: garantir o await dentro do storage evita perder o
+  // contexto antes de a operação realmente começar.
+  return storage.run(context, async () => await operation());
 }

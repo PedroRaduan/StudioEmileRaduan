@@ -7,7 +7,6 @@ import { getSystemPrisma } from "@/lib/db/prisma";
 import { hmac, sha256 } from "@/lib/security/hash";
 import { can, type Permission, type StaffRole } from "@/lib/auth/permissions";
 import { originMatchesHost } from "@/lib/security/origin";
-import { activateTenant } from "@/lib/tenancy/context";
 
 const SESSION_COOKIE = "erbf_session";
 const SESSION_DAYS = 7;
@@ -85,7 +84,6 @@ export async function requireStaff() {
     const hadSession = Boolean((await cookies()).get(SESSION_COOKIE)?.value);
     redirect(hadSession ? "/admin/login?reason=session-expired" : "/admin/login");
   }
-  activateTenant({ organizationId: user.organizationId, membershipId: user.membershipId, role: user.role });
   return user;
 }
 

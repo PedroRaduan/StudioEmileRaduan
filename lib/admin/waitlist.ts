@@ -13,7 +13,7 @@ const OFFER_MINUTES = 20;
 export class WaitlistError extends Error {}
 
 export async function getWaitlistDashboard() {
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   await prisma.waitlistOffer.updateMany({ where: { status: "PENDING", expiresAt: { lte: new Date() } }, data: { status: "EXPIRED", resolvedAt: new Date() } });
   const [entries, recentCancellations, clients, services, resources, settings] = await Promise.all([
@@ -47,7 +47,7 @@ export async function createWaitlistEntry(input: {
   note?: string | null;
   actorUserId: string;
 }) {
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   const [client, service, resource] = await Promise.all([
     prisma.client.findFirst({ where: { id: input.clientId, deletedAt: null, status: { not: "BLOCKED" } }, select: { id: true } }),
@@ -63,7 +63,7 @@ export async function createWaitlistEntry(input: {
 }
 
 export async function offerCancellationToWaitlist(input: { appointmentId: string; waitlistEntryId: string; actorUserId: string; origin: string }) {
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   const rawToken = randomBytes(32).toString("base64url");
   const offer = await prisma.$transaction(async (tx) => {

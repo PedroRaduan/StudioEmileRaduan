@@ -8,7 +8,7 @@ import { calculateDailyExpected } from "@/lib/admin/finance-calculations";
 export class FinanceError extends Error {}
 
 export async function getFinancialOverview() {
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);
@@ -29,7 +29,7 @@ export async function getFinancialOverview() {
 
 export async function createExpense(input: { category: string; description: string; amountCents: number; occurredAt: Date; paymentMethod?: "CASH" | "PIX" | "CARD" | "TRANSFER"; note?: string | null; actorUserId: string }) {
   if (input.amountCents <= 0) throw new FinanceError("Informe um valor de despesa maior que zero.");
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   return prisma.$transaction(async (tx) => {
     const expense = await tx.expense.create({ data: { ...input, organizationId, status: "PAID" } });
@@ -40,7 +40,7 @@ export async function createExpense(input: { category: string; description: stri
 
 export async function createServicePackage(input: { clientId: string; serviceId: string; name: string; totalSessions: number; priceCents?: number | null; expiresAt?: Date | null; note?: string | null; actorUserId: string }) {
   if (!Number.isInteger(input.totalSessions) || input.totalSessions < 1 || input.totalSessions > 999) throw new FinanceError("Informe uma quantidade de sessões válida.");
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   const [client, service] = await Promise.all([
     prisma.client.findFirst({ where: { id: input.clientId, deletedAt: null }, select: { id: true } }),
@@ -56,7 +56,7 @@ export async function createServicePackage(input: { clientId: string; serviceId:
 
 export async function closeDailyCash(input: { date: Date; actualCents: number; note?: string | null; actorUserId: string }) {
   if (!Number.isInteger(input.actualCents) || input.actualCents < 0) throw new FinanceError("Informe o valor contado em centavos corretamente.");
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   const start = new Date(input.date);
   start.setHours(0, 0, 0, 0);
@@ -75,7 +75,7 @@ export async function closeDailyCash(input: { date: Date; actualCents: number; n
 }
 
 export async function completeAppointmentWithFinance(input: { appointmentId: string; actorUserId: string }) {
-  const organizationId = requireTenantContext().organizationId;
+  const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   return prisma.$transaction(async (tx) => {
     const appointment = await tx.appointment.findFirst({ where: { id: input.appointmentId }, include: { service: true, resource: { select: { membershipId: true } }, payment: true } });

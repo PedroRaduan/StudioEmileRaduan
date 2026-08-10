@@ -1,18 +1,30 @@
 import { randomUUID } from "node:crypto";
 import { createAppointment, SchedulingError } from "../lib/agenda/create-appointment";
 import { dateInTimezone, todayInTimezone, weekdayInTimezone } from "../lib/date-time";
-import { getPrisma } from "../lib/db/prisma";
+import { getPrisma, getSystemPrisma } from "../lib/db/prisma";
+import { runWithTenant } from "../lib/tenancy/context";
 
-const prisma = getPrisma();
 const suffix = randomUUID().slice(0, 8);
-const createdAppointmentIds: string[] = [];
-let resourceId: string | undefined;
-let serviceId: string | undefined;
-const clientIds: string[] = [];
 
-try {
-  const owner = await prisma.user.findFirst({ where: { role: "OWNER", isActive: true } });
-  if (!owner) throw new Error("Crie uma administradora local antes de executar o teste de integração.");
+const membership = await getSystemPrisma().organizationMembership.findFirst({
+  where: { role: "OWNER", isActive: true, organization: { isActive: true }, user: { isActive: true } },
+  orderBy: { createdAt: "asc" },
+});
+
+if (!membership) throw new Error("Crie uma administradora local antes de executar o teste de integração.");
+
+await runWithTenant({
+  organizationId: membership.organizationId,
+  membershipId: membership.id,
+  role: membership.role,
+}, async () => {
+  const prisma = getPrisma();
+  const createdAppointmentIds: string[] = [];
+  let resourceId: string | undefined;
+  let serviceId: string | undefined;
+  const clientIds: string[] = [];
+
+  try {
 
   const date = addCalendarDays(todayInTimezone(), 2);
   const time = "15:00";
@@ -34,7 +46,7 @@ try {
     resourceId: resource.id,
     date,
     time,
-    ownerId: owner.id,
+    ownerId: membership.userId,
     requestKey: randomUUID(),
   })));
   const fulfilled = attempts.filter((attempt): attempt is PromiseFulfilledResult<Awaited<ReturnType<typeof createAppointment>>> => attempt.status === "fulfilled");
@@ -49,14 +61,15 @@ try {
   }
 
   console.info("PASSOU: duas tentativas simultâneas produziram um único agendamento.");
-} finally {
-  if (createdAppointmentIds.length) await prisma.appointment.deleteMany({ where: { id: { in: createdAppointmentIds } } });
-  if (clientIds.length) await prisma.client.deleteMany({ where: { id: { in: clientIds } } });
-  if (serviceId) await prisma.service.deleteMany({ where: { id: serviceId } });
-  if (resourceId) await prisma.calendarResource.deleteMany({ where: { id: resourceId } });
-  if (createdAppointmentIds.length) await prisma.auditLog.deleteMany({ where: { entityId: { in: createdAppointmentIds } } });
-  await prisma.$disconnect();
-}
+  } finally {
+    if (createdAppointmentIds.length) await prisma.appointment.deleteMany({ where: { id: { in: createdAppointmentIds } } });
+    if (clientIds.length) await prisma.client.deleteMany({ where: { id: { in: clientIds } } });
+    if (serviceId) await prisma.service.deleteMany({ where: { id: serviceId } });
+    if (resourceId) await prisma.calendarResource.deleteMany({ where: { id: resourceId } });
+    if (createdAppointmentIds.length) await prisma.auditLog.deleteMany({ where: { entityId: { in: createdAppointmentIds } } });
+    await prisma.$disconnect();
+  }
+});
 
 function addCalendarDays(date: string, days: number) {
   const value = new Date(`${date}T12:00:00Z`);
