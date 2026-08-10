@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const worker = readFileSync(new URL("../public/admin-sw.js", import.meta.url), "utf8");
 const register = readFileSync(new URL("../components/pwa-register.tsx", import.meta.url), "utf8");
+const legacyCleanup = readFileSync(new URL("../components/legacy-service-worker-cleanup.tsx", import.meta.url), "utf8");
 
 describe("política de cache do PWA administrativo", () => {
   it("mantém navegações administrativas em modo network-only", () => {
@@ -26,5 +27,11 @@ describe("política de cache do PWA administrativo", () => {
     expect(register).toContain('process.env.NODE_ENV !== "production"');
     expect(register).toContain('key.startsWith("emile-admin-shell-")');
     expect(register).toContain("registration.unregister()");
+  });
+
+  it("remove somente o worker público legado e seu cache", () => {
+    expect(legacyCleanup).toContain('new URL(worker.scriptURL).pathname === "/sw.js"');
+    expect(legacyCleanup).toContain('key.startsWith(LEGACY_CACHE_PREFIX)');
+    expect(legacyCleanup).toContain("registration.unregister()");
   });
 });

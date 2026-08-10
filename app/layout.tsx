@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { FormValueGuard } from "@/components/form-value-guard";
+import { LegacyServiceWorkerCleanup } from "@/components/legacy-service-worker-cleanup";
 
 export const viewport: Viewport = {
   themeColor: "#9A5B67",
@@ -54,6 +55,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html data-scroll-behavior="smooth" lang="pt-BR">
       <body>
         <FormValueGuard />
+        <LegacyServiceWorkerCleanup />
         {children}
       </body>
     </html>
