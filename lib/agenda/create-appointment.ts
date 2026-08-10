@@ -27,7 +27,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
     return await prisma.$transaction(async (tx) => {
       if (input.requestKey) {
         const duplicate = await tx.appointment.findUnique({ where: { requestKey: input.requestKey } });
-        if (duplicate) return duplicate;
+        if (duplicate) return { appointment: duplicate, availabilityWarning: null };
       }
 
       const [client, service, resource, settings] = await Promise.all([
@@ -76,8 +76,8 @@ export async function createAppointment(input: CreateAppointmentInput) {
       const hours = exception?.startsAtMinute !== null && exception?.startsAtMinute !== undefined && exception.endsAtMinute !== null
         ? { startsAtMinute: exception.startsAtMinute, endsAtMinute: exception.endsAtMinute, lunchStartsAt: null, lunchEndsAt: null }
         : rule;
-      if (!hours) throw new SchedulingError("Não há horário de atendimento configurado para este dia.");
-      if (("isEnabled" in hours && !hours.isEnabled) || !isInsideWorkingHours(startMinute, endMinute, hours)) {
+      const hasConfiguredWorkingHours = Boolean(hours && (!("isEnabled" in hours) || hours.isEnabled));
+      if (hasConfiguredWorkingHours && hours && !isInsideWorkingHours(startMinute, endMinute, hours)) {
         throw new SchedulingError("O horário está fora da disponibilidade configurada.");
       }
       if (block || conflict || holdConflict) throw new SchedulingError("Este horário acabou de ser ocupado. Escolha outro horário.");
@@ -107,7 +107,10 @@ export async function createAppointment(input: CreateAppointmentInput) {
 
       await tx.client.update({ where: { id: client.id }, data: { firstAppointmentAt: client.firstAppointmentAt ?? startsAt } });
       await tx.auditLog.create({ data: { userId: input.ownerId, action: "APPOINTMENT_CREATED", entityType: "Appointment", entityId: appointment.id } });
-      return appointment;
+      return {
+        appointment,
+        availabilityWarning: hasConfiguredWorkingHours ? null : "Os horários de trabalho deste dia ainda não estão configurados. O atendimento foi salvo mesmo assim; revise a agenda quando puder.",
+      };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 });
   } catch (error) {
     if (error instanceof SchedulingError) throw error;

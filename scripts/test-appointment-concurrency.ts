@@ -39,7 +39,7 @@ try {
   })));
   const fulfilled = attempts.filter((attempt): attempt is PromiseFulfilledResult<Awaited<ReturnType<typeof createAppointment>>> => attempt.status === "fulfilled");
   const rejected = attempts.filter((attempt): attempt is PromiseRejectedResult => attempt.status === "rejected");
-  createdAppointmentIds.push(...fulfilled.map((attempt) => attempt.value.id));
+  createdAppointmentIds.push(...fulfilled.map((attempt) => attempt.value.appointment.id));
 
   if (fulfilled.length !== 1 || rejected.length !== 1 || !(rejected[0].reason instanceof SchedulingError)) {
     const rejection = rejected[0]?.reason;

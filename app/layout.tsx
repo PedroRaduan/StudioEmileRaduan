@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 import { STUDIO_BRAND } from "@/lib/studio-config";
+import { FormValueGuard } from "@/components/form-value-guard";
 
 export const viewport: Viewport = {
   themeColor: "#9A5B67",
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html data-scroll-behavior="smooth" lang="pt-BR">
       <body>
+        <FormValueGuard />
         {children}
       </body>
     </html>

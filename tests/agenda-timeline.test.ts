@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CALENDAR_SLOT_INTERVALS,
   calendarSlotInterval,
+  nextTimelineStart,
   timelineBounds,
   timelinePixelsPerMinute,
   timelinePlacement,
@@ -34,6 +35,11 @@ describe("timeline diária da agenda", () => {
 
   it("estende os limites para não esconder um atendimento fora da rotina", () => {
     expect(timelineBounds(480, 1200, [{ startsAtMinute: 450, endsAtMinute: 1235 }], 15)).toEqual({ startsAtMinute: 450, endsAtMinute: 1245 });
+  });
+
+  it("inicia a grade no próximo atendimento ou compromisso do dia", () => {
+    expect(nextTimelineStart(480, [{ startsAtMinute: 930, endsAtMinute: 990 }, { startsAtMinute: 1080, endsAtMinute: 1140 }])).toBe(930);
+    expect(nextTimelineStart(480, [])).toBe(480);
   });
 
   it("usa 10 minutos como padrão para valores ausentes ou inválidos", () => {

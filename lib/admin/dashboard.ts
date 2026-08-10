@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/db/prisma";
-import { dateKeyInTimezone, localDayRange, todayInTimezone, weekdayInTimezone } from "@/lib/date-time";
+import { dateKeyInTimezone, greetingInTimezone, localDayRange, todayInTimezone, weekdayInTimezone } from "@/lib/date-time";
 import { requireStaff } from "@/lib/auth/session";
 import { ACTIVE_APPOINTMENT_STATUSES, FUTURE_VALID_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
@@ -61,6 +61,7 @@ export async function getDashboardData() {
   return {
     today,
     timezone,
+    greeting: greetingInTimezone(timezone, now),
     todayAppointments,
     upcoming,
     pendingPayments,

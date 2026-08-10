@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarPlus, ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react";
+import { CalendarOff, CalendarPlus, ChevronLeft, ChevronRight, LockKeyhole } from "lucide-react";
 import { AgendaDatePicker } from "@/components/admin/agenda-date-picker";
 import { DailyAgendaTimeline } from "@/components/admin/daily-agenda-timeline";
 import { getAgendaForDay, getAgendaForRange, getAgendaTimezone } from "@/lib/admin/agenda";
@@ -13,7 +13,7 @@ const views: Array<{ value: View; label: string }> = [
   { value: "list", label: "Lista" },
 ];
 
-export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ date?: string; view?: string; saved?: string }> }) {
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ date?: string; view?: string; saved?: string; availabilityWarning?: string }> }) {
   const params = await searchParams;
   const timezone = await getAgendaTimezone();
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayInTimezone(timezone);
@@ -29,9 +29,10 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     <main className="admin-page agenda-page">
       <div className="admin-page-heading">
         <div><p className="eyebrow">Agenda</p><h1>{periodTitle(date, view)}</h1><p>Atendimentos, bloqueios e alterações em uma única visão.</p></div>
-        <Link className="button button-primary" href={`/admin/agendamentos/novo?date=${date}`}><CalendarPlus aria-hidden="true" size={18} /> Novo agendamento</Link>
+        <div className="agenda-heading-actions"><Link className="secondary-action" href={`/admin/configuracoes/bloqueios?date=${date}`}><CalendarOff aria-hidden="true" size={17} /> Compromisso pessoal</Link><Link className="button button-primary" href={`/admin/agendamentos/novo?date=${date}`}><CalendarPlus aria-hidden="true" size={18} /> Novo agendamento</Link></div>
       </div>
       {params.saved ? <p className="form-success agenda-success" role="status">Agendamento salvo. O horário já está protegido contra conflitos.</p> : null}
+      {params.availabilityWarning ? <p className="form-warning" role="status">Horário salvo, mas este dia ainda não possui expediente configurado. Revise os horários de trabalho quando puder.</p> : null}
       <nav className="agenda-view-tabs" aria-label="Visualização da agenda">
         {views.map((item) => <Link className={view === item.value ? "active" : ""} href={`/admin/agenda?date=${date}&view=${item.value}`} key={item.value}>{item.label}</Link>)}
       </nav>

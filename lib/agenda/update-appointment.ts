@@ -44,14 +44,18 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
       const hours = exception?.startsAtMinute !== null && exception?.startsAtMinute !== undefined && exception.endsAtMinute !== null
         ? { startsAtMinute: exception.startsAtMinute, endsAtMinute: exception.endsAtMinute, lunchStartsAt: null, lunchEndsAt: null }
         : rule;
-      if (!hours || ("isEnabled" in hours && !hours.isEnabled) || !isInsideWorkingHours(startMinute, endMinute, hours)) throw new SchedulingError("O novo horário está fora da disponibilidade configurada.");
+      const hasConfiguredWorkingHours = Boolean(hours && (!("isEnabled" in hours) || hours.isEnabled));
+      if (hasConfiguredWorkingHours && hours && !isInsideWorkingHours(startMinute, endMinute, hours)) throw new SchedulingError("O novo horário está fora da disponibilidade configurada.");
       if (block || conflict || holdConflict) throw new SchedulingError("O novo horário está ocupado. Escolha outra opção.");
 
       const previous = { startsAt: appointment.startsAt.toISOString(), endsAt: appointment.endsAt.toISOString(), status: appointment.status };
       const updated = await tx.appointment.update({ where: { id: appointment.id }, data: { ...timing, durationMinutes: appointment.service.durationMinutes, status: "SCHEDULED", confirmedAt: null, cancellationReason: null, cancelledAt: null } });
       await tx.appointmentEvent.create({ data: { appointmentId: appointment.id, actorUserId: input.actorUserId, type: "RESCHEDULED", reason: input.reason, previousValue: previous, nextValue: { startsAt: updated.startsAt.toISOString(), endsAt: updated.endsAt.toISOString(), status: updated.status } } });
       await tx.auditLog.create({ data: { userId: input.actorUserId, action: "APPOINTMENT_RESCHEDULED", entityType: "Appointment", entityId: appointment.id, before: previous, after: { startsAt: updated.startsAt.toISOString(), status: updated.status } } });
-      return updated;
+      return {
+        appointment: updated,
+        availabilityWarning: hasConfiguredWorkingHours ? null : "Os horários de trabalho deste dia ainda não estão configurados. O reagendamento foi salvo mesmo assim; revise a agenda quando puder.",
+      };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 5000, timeout: 10000 });
   } catch (error) {
     if (error instanceof SchedulingError) throw error;

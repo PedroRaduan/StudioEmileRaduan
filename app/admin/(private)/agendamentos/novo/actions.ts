@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createAppointment, SchedulingError } from "@/lib/agenda/create-appointment";
 import { assertSameOrigin, requirePermission } from "@/lib/auth/session";
+import { fieldErrorsFromZod, type FieldErrors } from "@/lib/forms/validation";
 
-export type AppointmentFormState = { error?: string };
+export type AppointmentFormState = { error?: string; fieldErrors?: FieldErrors };
 
 const schema = z.object({
   clientId: z.string().cuid(), serviceId: z.string().cuid(), resourceId: z.string().cuid(),
@@ -18,14 +19,16 @@ export async function createAppointmentAction(_: AppointmentFormState, formData:
   await assertSameOrigin();
   const owner = await requirePermission("APPOINTMENTS_MANAGE");
   const parsed = schema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: "Revise os dados obrigatórios do agendamento." };
+  if (!parsed.success) return { error: "Revise os campos indicados do agendamento.", fieldErrors: fieldErrorsFromZod(parsed.error) };
   let appointmentId: string;
+  let availabilityWarning: string | null = null;
   try {
-    const appointment = await createAppointment({ ...parsed.data, ownerId: owner.id });
-    appointmentId = appointment.id;
+    const result = await createAppointment({ ...parsed.data, ownerId: owner.id });
+    appointmentId = result.appointment.id;
+    availabilityWarning = result.availabilityWarning;
   } catch (error) {
     return { error: error instanceof SchedulingError ? error.message : "Não foi possível salvar o agendamento. Tente novamente." };
   }
   revalidatePath("/admin"); revalidatePath("/admin/agenda"); revalidatePath("/admin/clientes");
-  redirect(`/admin/agenda?date=${parsed.data.date}&saved=${appointmentId}`);
+  redirect(`/admin/agenda?date=${parsed.data.date}&saved=${appointmentId}${availabilityWarning ? "&availabilityWarning=1" : ""}`);
 }

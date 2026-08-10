@@ -12,7 +12,7 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   return (
     <main className="admin-page">
       <div className="admin-page-heading">
-        <div><p className="eyebrow">Central operacional</p><h1>Bom dia, vamos cuidar do seu studio.</h1><p>Veja o que merece atenção hoje, {formatDate(new Date(), { weekday: "long", day: "numeric", month: "long" })}.</p></div>
+        <div><p className="eyebrow">Central operacional</p><h1>{data.greeting}, vamos cuidar do seu studio.</h1><p>Veja o que merece atenção hoje, {formatDate(new Date(), { weekday: "long", day: "numeric", month: "long", timeZone: data.timezone })}.</p></div>
         <Link className="button button-primary" href={`/admin/agendamentos/novo?date=${data.today}`}><CalendarPlus size={18} /> Novo agendamento</Link>
       </div>
 

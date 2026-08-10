@@ -30,6 +30,12 @@ export function timelineSlots(startsAtMinute: number, endsAtMinute: number, inte
   return slots;
 }
 
+/** Retorna o início visual da agenda sem manter horas vazias antes do próximo item. */
+export function nextTimelineStart(defaultStart: number, spans: TimelineSpan[]) {
+  const validSpans = spans.filter((span) => span.endsAtMinute > span.startsAtMinute);
+  return validSpans.length ? Math.min(...validSpans.map((span) => span.startsAtMinute)) : defaultStart;
+}
+
 export function timelineBounds(defaultStart: number, defaultEnd: number, spans: TimelineSpan[], interval: CalendarSlotInterval) {
   const validSpans = spans.filter((span) => span.endsAtMinute > span.startsAtMinute);
   const earliest = validSpans.length ? Math.min(...validSpans.map((span) => span.startsAtMinute)) : defaultStart;

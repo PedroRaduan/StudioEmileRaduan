@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dateInTimezone, formatDate, localDayRange } from "../lib/date-time";
+import { dateInTimezone, formatDate, greetingInTimezone, localDayRange } from "../lib/date-time";
 
 describe("formatação de datas", () => {
   const value = new Date("2026-08-08T15:30:00.000Z");
@@ -55,5 +55,11 @@ describe("formatação de datas", () => {
 
   it("recusa datas de calendário inválidas", () => {
     expect(() => dateInTimezone("2026-02-30", "10:00")).toThrow(RangeError);
+  });
+
+  it("usa a saudação correta no fuso do studio", () => {
+    expect(greetingInTimezone("America/Sao_Paulo", new Date("2026-08-09T13:00:00.000Z"))).toBe("Bom dia");
+    expect(greetingInTimezone("America/Sao_Paulo", new Date("2026-08-09T18:00:00.000Z"))).toBe("Boa tarde");
+    expect(greetingInTimezone("America/Sao_Paulo", new Date("2026-08-09T22:00:00.000Z"))).toBe("Boa noite");
   });
 });

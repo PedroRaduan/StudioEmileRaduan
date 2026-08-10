@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { CalendarPlus, CheckCheck, Circle, CircleCheckBig, Clock3, LockKeyhole, UserRoundX, X } from "lucide-react";
 import type { getAgendaForDay } from "@/lib/admin/agenda";
-import { dateKeyInTimezone, formatDate, formatTime } from "@/lib/date-time";
+import { dateKeyInTimezone, formatDate, formatTime, todayInTimezone } from "@/lib/date-time";
 import {
   calendarSlotInterval,
   minuteOfDayInTimezone,
   timeFromMinute,
   timelineBounds,
+  nextTimelineStart,
   timelinePixelsPerMinute,
   timelinePlacement,
   timelineSlots,
@@ -44,7 +45,12 @@ export function DailyAgendaTimeline({ data, date }: { data: DailyAgendaData; dat
   const starts = views.map((view) => view.workingWindow.start);
   const ends = views.map((view) => view.workingWindow.end);
   const spans = views.flatMap((view) => [...view.appointmentSpans, ...view.blockSpans]);
-  const bounds = timelineBounds(starts.length ? Math.min(...starts) : 8 * 60, ends.length ? Math.max(...ends) : 20 * 60, spans, interval);
+  const currentMinute = date === todayInTimezone(timezone) ? minuteOfDayInTimezone(new Date(), timezone) : null;
+  const relevantSpans = currentMinute === null ? spans : spans.filter((span) => span.endsAtMinute > currentMinute);
+  const nextCommitmentStart = relevantSpans.length ? Math.min(...relevantSpans.map((span) => span.startsAtMinute)) : null;
+  const defaultStart = starts.length ? Math.min(...starts) : 8 * 60;
+  const focusedStart = nextCommitmentStart === null ? defaultStart : nextTimelineStart(defaultStart, relevantSpans);
+  const bounds = timelineBounds(focusedStart, ends.length ? Math.max(...ends) : 20 * 60, relevantSpans, interval);
   const pixelsPerMinute = timelinePixelsPerMinute(interval);
   const height = (bounds.endsAtMinute - bounds.startsAtMinute) * pixelsPerMinute;
   const slots = timelineSlots(bounds.startsAtMinute, bounds.endsAtMinute, interval);
@@ -72,8 +78,9 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
   timezone?: string;
   view: ResourceView;
 }) {
-  const liveAppointments = view.appointments.filter((appointment) => appointment.status !== "CANCELED");
+  const liveAppointments = view.appointments.filter((appointment) => appointment.status !== "CANCELED" && spanForDate(appointment.startsAt, appointment.endsAt, date, timezone).endsAtMinute > bounds.startsAtMinute);
   const canceledAppointments = view.appointments.filter((appointment) => appointment.status === "CANCELED");
+  const visibleBlocks = view.blocks.filter((block) => spanForDate(block.startsAt, block.endsAt, date, timezone).endsAtMinute > bounds.startsAtMinute);
   return <article className="timeline-resource">
     <header><strong>{view.resource.name}</strong><span>{liveAppointments.length} {liveAppointments.length === 1 ? "atendimento" : "atendimentos"}</span></header>
     {view.workingWindow.notice ? <div className="timeline-notice" role="note"><span>{view.workingWindow.notice}</span></div> : null}
@@ -84,7 +91,7 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
         const occupied = [...view.appointmentSpans, ...view.blockSpans].some((span) => span.startsAtMinute < minute + interval && span.endsAtMinute > minute);
         return occupied ? <div aria-hidden="true" className="timeline-slot is-occupied" key={minute} style={{ height: placement.height, top: placement.top }}><time>{time}</time><span /></div> : <Link aria-label={`Criar agendamento na agenda ${view.resource.name} às ${time}`} className="timeline-slot" href={`/admin/agendamentos/novo?date=${date}&time=${time}&resourceId=${view.resource.id}`} key={minute} style={{ height: placement.height, top: placement.top }}><time dateTime={time}>{time}</time><span aria-hidden="true" /></Link>;
       })}
-      {view.blocks.map((block) => {
+      {visibleBlocks.map((block) => {
         const span = spanForDate(block.startsAt, block.endsAt, date, timezone);
         const placement = timelinePlacement(span.startsAtMinute, span.endsAtMinute, bounds.startsAtMinute, pixelsPerMinute);
         return <div className="timeline-block" key={block.id} style={{ height: placement.height, top: placement.top }}><LockKeyhole aria-hidden="true" size={14} /><strong>{block.title}</strong><span>{formatTime(block.startsAt)}–{formatTime(block.endsAt)}</span></div>;

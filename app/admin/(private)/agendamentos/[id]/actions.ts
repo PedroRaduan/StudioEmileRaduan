@@ -10,8 +10,9 @@ import { SchedulingError } from "@/lib/agenda/create-appointment";
 import { formatDate, formatTime } from "@/lib/date-time";
 import { createAppointmentActionLinks } from "@/lib/client-booking/action-tokens";
 import { CURRENT_STUDIO_ID, STUDIO_BRAND } from "@/lib/studio-config";
+import { fieldErrorsFromZod, type FieldErrors } from "@/lib/forms/validation";
 
-export type AppointmentActionState = { error?: string; success?: string };
+export type AppointmentActionState = { error?: string; success?: string; fieldErrors?: FieldErrors; warning?: string };
 
 const statusSchema = z.object({ appointmentId: z.string().cuid(), status: z.enum(["SCHEDULED", "AWAITING_CONFIRMATION", "CONFIRMED", "ARRIVED", "IN_SERVICE", "COMPLETED", "NO_SHOW"]) });
 
@@ -75,11 +76,11 @@ export async function rescheduleAppointmentAction(_: AppointmentActionState, for
   await assertSameOrigin();
   const staff = await requirePermission("APPOINTMENTS_MANAGE");
   const parsed = rescheduleSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise a nova data e o horário." };
+  if (!parsed.success) return { error: "Revise os campos indicados para reagendar.", fieldErrors: fieldErrorsFromZod(parsed.error) };
   try {
-    await rescheduleAppointment({ ...parsed.data, actorUserId: staff.id });
+    const result = await rescheduleAppointment({ ...parsed.data, actorUserId: staff.id });
     refreshAppointment(parsed.data.appointmentId);
-    return { success: "Agendamento reagendado e histórico atualizado." };
+    return { success: "Agendamento reagendado e histórico atualizado.", warning: result.availabilityWarning ?? undefined };
   } catch (error) {
     return { error: error instanceof SchedulingError ? error.message : "Não foi possível reagendar." };
   }
@@ -91,7 +92,7 @@ export async function cancelAppointmentAction(_: AppointmentActionState, formDat
   await assertSameOrigin();
   const staff = await requirePermission("APPOINTMENTS_MANAGE");
   const parsed = cancellationSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise o motivo do cancelamento." };
+  if (!parsed.success) return { error: "Revise o motivo do cancelamento.", fieldErrors: fieldErrorsFromZod(parsed.error) };
   try {
     await cancelAppointment({ ...parsed.data, actorUserId: staff.id });
     refreshAppointment(parsed.data.appointmentId);

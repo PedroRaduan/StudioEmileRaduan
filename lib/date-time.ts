@@ -66,6 +66,15 @@ export function todayInTimezone(timezone = DEFAULT_TIMEZONE) {
   return dateKeyInTimezone(new Date(), timezone);
 }
 
+export function greetingInTimezone(timezone = DEFAULT_TIMEZONE, value = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: timezone, hour: "2-digit", hourCycle: "h23" })
+    .formatToParts(value)
+    .find((part) => part.type === "hour")?.value);
+  if (hour < 12) return "Bom dia";
+  if (hour < 18) return "Boa tarde";
+  return "Boa noite";
+}
+
 function parseLocalDateTime(date: string, time: string): LocalDateTimeParts {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
     throw new RangeError("Data ou horário inválido.");
