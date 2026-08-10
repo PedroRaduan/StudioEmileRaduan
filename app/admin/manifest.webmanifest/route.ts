@@ -8,7 +8,9 @@ export function GET() {
     name: STUDIO_BRAND.adminAppName,
     short_name: STUDIO_BRAND.adminAppShortName,
     description: `Agenda administrativa da ${STUDIO_BRAND.name}.`,
-    start_url: "/admin",
+    // O start_url precisa estar dentro de scope. Sem a barra final, o Chrome
+    // considera /admin fora de /admin/ e ignora o escopo restrito do PWA.
+    start_url: "/admin/",
     scope: "/admin/",
     display: "standalone",
     background_color: STUDIO_BRAND.backgroundColor,

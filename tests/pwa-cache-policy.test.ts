@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const worker = readFileSync(new URL("../public/admin-sw.js", import.meta.url), "utf8");
 const register = readFileSync(new URL("../components/pwa-register.tsx", import.meta.url), "utf8");
 const legacyCleanup = readFileSync(new URL("../components/legacy-service-worker-cleanup.tsx", import.meta.url), "utf8");
+const manifestRoute = readFileSync(new URL("../app/admin/manifest.webmanifest/route.ts", import.meta.url), "utf8");
 
 describe("política de cache do PWA administrativo", () => {
   it("mantém navegações administrativas em modo network-only", () => {
@@ -33,5 +34,10 @@ describe("política de cache do PWA administrativo", () => {
     expect(legacyCleanup).toContain('new URL(worker.scriptURL).pathname === "/sw.js"');
     expect(legacyCleanup).toContain('key.startsWith(LEGACY_CACHE_PREFIX)');
     expect(legacyCleanup).toContain("registration.unregister()");
+  });
+
+  it("mantém a rota inicial dentro do escopo administrativo do manifesto", () => {
+    expect(manifestRoute).toContain('start_url: "/admin/"');
+    expect(manifestRoute).toContain('scope: "/admin/"');
   });
 });
