@@ -2,12 +2,12 @@ import "server-only";
 import { getPrisma } from "@/lib/db/prisma";
 import { localDayRange } from "@/lib/date-time";
 import { requirePermission } from "@/lib/auth/session";
-import { CURRENT_STUDIO_ID } from "@/lib/studio-config";
+import { requireTenantContext } from "@/lib/tenancy/context";
 
 export async function getAgendaForDay(date: string) {
   await requirePermission("APPOINTMENTS_MANAGE");
   const prisma = getPrisma();
-  const settings = await prisma.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID }, select: { calendarSlotInterval: true, timezone: true } });
+  const settings = await prisma.studioSettings.findUnique({ where: { organizationId: requireTenantContext().organizationId }, select: { calendarSlotInterval: true, timezone: true } });
   const range = localDayRange(date, settings?.timezone);
   const databaseDate = new Date(`${date}T12:00:00.000Z`);
   const [appointments, blocks, resources, holiday] = await Promise.all([
@@ -34,21 +34,21 @@ export async function getAgendaForDay(date: string) {
       },
       orderBy: { createdAt: "asc" },
     }),
-    prisma.holiday.findUnique({ where: { date: databaseDate }, select: { name: true, isClosed: true } }),
+    prisma.holiday.findFirst({ where: { date: databaseDate }, select: { name: true, isClosed: true } }),
   ]);
   return { appointments, blocks, resource: resources[0] ?? null, resources, settings, holiday };
 }
 
 export async function getAgendaTimezone() {
   await requirePermission("APPOINTMENTS_MANAGE");
-  const settings = await getPrisma().studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID }, select: { timezone: true } });
+  const settings = await getPrisma().studioSettings.findUnique({ where: { organizationId: requireTenantContext().organizationId }, select: { timezone: true } });
   return settings?.timezone;
 }
 
 export async function getAgendaForRange(startDate: string, endDate: string) {
   await requirePermission("APPOINTMENTS_MANAGE");
   const prisma = getPrisma();
-  const settings = await prisma.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID }, select: { timezone: true } });
+  const settings = await prisma.studioSettings.findUnique({ where: { organizationId: requireTenantContext().organizationId }, select: { timezone: true } });
   const start = localDayRange(startDate, settings?.timezone).start;
   const end = localDayRange(endDate, settings?.timezone).end;
   const [appointments, blocks] = await Promise.all([
@@ -77,7 +77,7 @@ export async function getAppointmentFormData() {
     prisma.client.findMany({ where: { deletedAt: null, status: { not: "BLOCKED" } }, select: { id: true, fullName: true, preferredName: true }, orderBy: { fullName: "asc" }, take: 250 }),
     prisma.service.findMany({ where: { isActive: true }, select: { id: true, name: true, durationMinutes: true, priceCents: true, promotionalPriceCents: true }, orderBy: [{ displayOrder: "asc" }, { name: "asc" }] }),
     prisma.calendarResource.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { createdAt: "asc" } }),
-    prisma.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID }, select: { timezone: true } }),
+    prisma.studioSettings.findUnique({ where: { organizationId: requireTenantContext().organizationId }, select: { timezone: true } }),
   ]);
   return { clients, services, resources, timezone: settings?.timezone };
 }

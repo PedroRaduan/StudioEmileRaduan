@@ -1,4 +1,4 @@
-import { getPrisma } from "@/lib/db/prisma";
+import { getSystemPrisma } from "@/lib/db/prisma";
 export { initialAdminSchema, isInitialSetupAllowed, strongPasswordSchema } from "./admin-setup-policy";
 
 export const ADMIN_TERMS_VERSION = "2026-08-07";
@@ -10,7 +10,7 @@ export type AdminSetupState = "ready" | "needs_setup" | "unavailable";
 export async function getAdminSetupState(): Promise<AdminSetupState> {
   if (!process.env.DATABASE_URL || !process.env.SESSION_SECRET) return "unavailable";
   try {
-    return await getPrisma().user.count() > 0 ? "ready" : "needs_setup";
+    return await getSystemPrisma().user.count() > 0 ? "ready" : "needs_setup";
   } catch {
     return "unavailable";
   }

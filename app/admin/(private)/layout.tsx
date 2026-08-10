@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { requireStaff } from "@/lib/auth/session";
 import { AdminShell } from "@/components/admin/shell";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { PwaInstallProvider } from "@/components/pwa-install";
 import { PwaRegister } from "@/components/pwa-register";
 
 export const dynamic = "force-dynamic";
@@ -24,5 +25,5 @@ export const metadata: Metadata = {
 
 export default async function PrivateAdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const staff = await requireStaff();
-  return <AdminShell staffName={staff.name} staffRole={staff.role}>{children}{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell>;
+  return <PwaInstallProvider><AdminShell staffName={staff.name} staffRole={staff.role}>{children}{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell></PwaInstallProvider>;
 }

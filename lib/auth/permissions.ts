@@ -1,4 +1,4 @@
-export type StaffRole = "OWNER" | "RECEPTIONIST";
+export type StaffRole = "OWNER" | "ADMIN" | "STAFF" | "RECEPTIONIST";
 export type Permission =
   | "APPOINTMENTS_MANAGE"
   | "CLIENTS_MANAGE"
@@ -8,10 +8,18 @@ export type Permission =
   | "REPORTS_VIEW"
   | "STAFF_MANAGE"
   | "SENSITIVE_CLIENT_VIEW"
-  | "EXPORT_DATA";
+  | "EXPORT_DATA"
+  | "FINANCE_VIEW"
+  | "FINANCE_MANAGE"
+  | "FINANCE_CLOSE"
+  | "COMMISSIONS_VIEW"
+  | "WAITLIST_MANAGE";
 
-const receptionistPermissions = new Set<Permission>(["APPOINTMENTS_MANAGE", "CLIENTS_MANAGE", "PAYMENTS_RECORD"]);
+const permissionsByRole: Record<Exclude<StaffRole, "OWNER" | "ADMIN">, ReadonlySet<Permission>> = {
+  STAFF: new Set(["APPOINTMENTS_MANAGE", "CLIENTS_MANAGE", "PAYMENTS_RECORD", "WAITLIST_MANAGE"]),
+  RECEPTIONIST: new Set(["APPOINTMENTS_MANAGE", "CLIENTS_MANAGE", "PAYMENTS_RECORD", "WAITLIST_MANAGE"]),
+};
 
 export function can(role: StaffRole, permission: Permission) {
-  return role === "OWNER" || receptionistPermissions.has(permission);
+  return role === "OWNER" || role === "ADMIN" || permissionsByRole[role].has(permission);
 }

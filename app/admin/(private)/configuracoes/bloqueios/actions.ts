@@ -6,6 +6,7 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { dateInTimezone } from "@/lib/date-time";
 import { assertSameOrigin, requirePermission } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
+import { requireTenantContext } from "@/lib/tenancy/context";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export type AvailabilityFormState = { error?: string; success?: string };
@@ -73,7 +74,7 @@ export async function saveExceptionAction(_: AvailabilityFormState, formData: Fo
   const settings = await prisma.studioSettings.findUnique({ where: { id: "studio" }, select: { timezone: true } });
   const date = safeDate(parsed.data.date, settings?.timezone);
   if (!date) return { error: "Informe uma data válida." };
-  const exception = await prisma.availabilityException.upsert({ where: { resourceId_date: { resourceId: parsed.data.resourceId, date } }, create: { resourceId: parsed.data.resourceId, date, startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note }, update: { startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note } });
+  const exception = await prisma.availabilityException.upsert({ where: { organizationId_resourceId_date: { organizationId: requireTenantContext().organizationId, resourceId: parsed.data.resourceId, date } }, create: { resourceId: parsed.data.resourceId, date, startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note }, update: { startsAtMinute, endsAtMinute, isClosed, note: parsed.data.note } });
   await prisma.auditLog.create({ data: { userId: owner.id, action: "AVAILABILITY_EXCEPTION_SAVED", entityType: "AvailabilityException", entityId: exception.id, after: { date: parsed.data.date, isClosed, startsAtMinute, endsAtMinute } } });
   refreshAvailability();
   return { success: isClosed ? "Data marcada como fechada." : "Horário especial salvo para esta data." };

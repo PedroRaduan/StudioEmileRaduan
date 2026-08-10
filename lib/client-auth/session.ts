@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { getPrisma } from "@/lib/db/prisma";
+import { getSystemPrisma } from "@/lib/db/prisma";
 import { hashIp } from "@/lib/auth/session";
 import { sha256 } from "@/lib/security/hash";
+import { activateTenant } from "@/lib/tenancy/context";
 
 const CLIENT_SESSION_COOKIE = "erbf_client_session";
 const CLIENT_SESSION_DAYS = 30;
@@ -21,15 +22,17 @@ export async function getCurrentClient(): Promise<CurrentClient | null> {
   const token = (await cookies()).get(CLIENT_SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const session = await getPrisma().clientSession.findUnique({
+  const session = await getSystemPrisma().clientSession.findUnique({
     where: { tokenHash: sha256(token) },
     include: { account: { include: { client: true } } },
   });
 
-  if (!session || session.expiresAt <= new Date() || !session.account.isActive || session.account.client.deletedAt) {
-    if (session) await getPrisma().clientSession.delete({ where: { id: session.id } }).catch(() => undefined);
+  if (!session || !session.organizationId || session.expiresAt <= new Date() || !session.account.isActive || session.account.client.deletedAt) {
+    if (session) await getSystemPrisma().clientSession.delete({ where: { id: session.id } }).catch(() => undefined);
     return null;
   }
+
+  activateTenant({ organizationId: session.organizationId, membershipId: `client:${session.accountId}`, role: "RECEPTIONIST" });
 
   return {
     accountId: session.account.id,
@@ -46,14 +49,15 @@ export async function requireClient() {
   return client;
 }
 
-export async function createClientSession(accountId: string) {
+export async function createClientSession(accountId: string, organizationId: string) {
   const token = randomBytes(32).toString("base64url");
   const requestHeaders = await headers();
   const expiresAt = new Date(Date.now() + CLIENT_SESSION_DAYS * 24 * 60 * 60 * 1000);
 
-  await getPrisma().clientSession.create({
+  await getSystemPrisma().clientSession.create({
     data: {
       accountId,
+      organizationId,
       tokenHash: sha256(token),
       expiresAt,
       ipHash: hashIp(requestHeaders.get("x-forwarded-for")),
@@ -74,7 +78,7 @@ export async function destroyClientSession() {
   const cookieStore = await cookies();
   const token = cookieStore.get(CLIENT_SESSION_COOKIE)?.value;
   if (token && process.env.DATABASE_URL) {
-    await getPrisma().clientSession.deleteMany({ where: { tokenHash: sha256(token) } });
+    await getSystemPrisma().clientSession.deleteMany({ where: { tokenHash: sha256(token) } });
   }
   cookieStore.delete(CLIENT_SESSION_COOKIE);
 }

@@ -1,126 +1,28 @@
 import Link from "next/link";
-import { CalendarDays, ChevronRight, Clock3, MapPin, MessageCircle } from "lucide-react";
-import type { CSSProperties } from "react";
-import { getPublicStudio, whatsappLink } from "@/lib/studio";
+import { Check, ChevronRight, LockKeyhole } from "lucide-react";
 
-export const dynamic = "force-dynamic";
+const features = [
+  ["Agenda organizada", "Veja os horários, bloqueios e atendimentos em uma única rotina."],
+  ["Clientes centralizados", "Cadastros, histórico e observações ficam no contexto certo."],
+  ["Menos conflitos", "A disponibilidade é validada no servidor antes de confirmar a vaga."],
+  ["Gestão simples", "Serviços, duração, valores e horários sem planilhas improvisadas."],
+  ["Em qualquer dispositivo", "Uma experiência pensada para a correria do celular e para o desktop."],
+  ["Pronto para equipes", "A base já separa organizações, membros e permissões."],
+];
 
-export default async function PublicHomePage() {
-  const studio = await getPublicStudio();
-  const whatsapp = studio.whatsapp
-    ? whatsappLink(studio.whatsapp, "Olá, gostaria de conversar sobre um horário.")
-    : null;
-
-  return (
-    <main style={{ "--rose": studio.primaryColor, "--rose-soft": studio.secondaryColor } as CSSProperties}>
-      <header className="public-header">
-        <a className="wordmark" href="#inicio" aria-label={`Início — ${studio.studioName}`}>
-          <span>Emile Raduan</span>
-          <small>Beauty Face</small>
-        </a>
-        <a className="header-link" href="#contato">Contato</a>
-      </header>
-
-      <section className="public-hero" id="inicio" aria-labelledby="hero-title">
-        <div className="hero-copy">
-          <p className="eyebrow">Atendimento com hora marcada</p>
-          <h1 id="hero-title">Seu cuidado começa com uma conversa.</h1>
-          <p className="hero-description">
-            {studio.publicIntro ??
-              "Para conhecer os procedimentos e verificar disponibilidade, fale diretamente com Emile pelo WhatsApp."}
-          </p>
-          <div className="public-hero-actions">
-          {studio.onlineBookingEnabled ? <Link className="button button-primary" href="/agendar"><CalendarDays size={19} />Agendar on-line</Link> : whatsapp ? (
-            <a className="button button-primary" href={whatsapp} target="_blank" rel="noreferrer">
-              <MessageCircle size={19} aria-hidden="true" />
-              Conversar pelo WhatsApp
-            </a>
-          ) : (
-            <span className="contact-pending">O canal de atendimento está sendo configurado.</span>
-          )}
-          {studio.onlineBookingEnabled && whatsapp ? <a className="secondary-action" href={whatsapp} target="_blank" rel="noreferrer"><MessageCircle size={18} />Tirar uma dúvida</a> : null}
-          </div>
-        </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="hero-arc hero-arc-one" />
-          <div className="hero-arc hero-arc-two" />
-          <div className="hero-brow" />
-          <span>ER</span>
-        </div>
-      </section>
-
-      {studio.services.length > 0 ? (
-        <section className="public-section services-section" aria-labelledby="services-title">
-          <div className="section-heading">
-            <p className="eyebrow">Procedimentos</p>
-            <h2 id="services-title">Cuidados pensados para você.</h2>
-          </div>
-          <div className="service-list">
-            {studio.services.map((service) => (
-              <article className="service-row" key={service.id}>
-                <div>
-                  <h3>{service.name}</h3>
-                  {service.shortDescription ? <p>{service.shortDescription}</p> : null}
-                </div>
-                <div className="service-meta">
-                  <span><Clock3 size={16} aria-hidden="true" /> {service.durationMinutes} min</span>
-                  {service.priceCents !== null ? <strong>{formatCurrency(service.priceCents)}</strong> : null}
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="public-section appointment-section" aria-labelledby="appointment-title">
-        <div className="appointment-number">01</div>
-        <div>
-          <p className="eyebrow">Agendamento</p>
-          <h2 id="appointment-title">{studio.onlineBookingEnabled ? "Escolha seu horário com tranquilidade." : "Horários são organizados pessoalmente."}</h2>
-          <p>
-            {studio.onlineBookingEnabled ? "Consulte a agenda em tempo real, escolha um serviço e confirme em poucos passos." : "A disponibilidade é confirmada diretamente por WhatsApp. Assim, cada atendimento recebe a atenção necessária antes de ser marcado."}
-          </p>
-          {studio.onlineBookingEnabled ? <Link className="text-link" href="/agendar">Ver horários disponíveis <ChevronRight size={17} /></Link> : whatsapp ? (
-            <a className="text-link" href={whatsapp} target="_blank" rel="noreferrer">
-              Iniciar conversa <ChevronRight size={17} aria-hidden="true" />
-            </a>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="public-section about-section" aria-labelledby="about-title">
-        <p className="eyebrow">Sobre o studio</p>
-        <h2 id="about-title">{studio.studioName}</h2>
-        {studio.publicAbout ? <p>{studio.publicAbout}</p> : <p>Informações sobre o studio serão atualizadas em breve.</p>}
-      </section>
-
-      <footer className="public-footer" id="contato">
-        <div>
-          <p className="eyebrow">Contato</p>
-          <h2>Vamos encontrar o melhor horário.</h2>
-        </div>
-        <div className="footer-contact">
-          {whatsapp ? (
-            <a className="button button-light" href={whatsapp} target="_blank" rel="noreferrer">
-              <MessageCircle size={19} aria-hidden="true" />
-              Falar no WhatsApp
-            </a>
-          ) : null}
-          {studio.addressLine1 ? (
-            <p><MapPin size={17} aria-hidden="true" /> {studio.addressLine1}{studio.city ? ` · ${studio.city}` : ""}</p>
-          ) : null}
-          {studio.instagram ? <a href={instagramLink(studio.instagram)} target="_blank" rel="noreferrer">{studio.instagram.replace(/^@/, "@")} </a> : null}
-        </div>
-        <p className="footer-note"><CalendarDays size={16} aria-hidden="true" /> Atendimento mediante agendamento.</p>
-      </footer>
-    </main>
-  );
+export default function HomePage() {
+  return <main className="marketing-page">
+    <header className="marketing-header"><Link className="saas-logo" href="/">agenda<span>.</span></Link><nav aria-label="Navegação principal"><a href="#recursos">Recursos</a><a href="#como-funciona">Como funciona</a><a href="#para-quem">Para quem é</a><a href="#seguranca">Segurança</a><a href="#planos">Planos</a><a href="#faq">FAQ</a></nav><div className="marketing-actions"><Link href="/login">Entrar</Link><Link className="button button-primary" href="/cadastro">Criar conta grátis</Link></div></header>
+    <section className="marketing-hero" id="inicio"><div><p className="eyebrow">AGENDA PARA NEGÓCIOS DE ATENDIMENTO</p><h1>Organize sua agenda.<br />Simplifique seu atendimento.</h1><p className="hero-lead">Uma plataforma para centralizar horários, clientes, serviços e a rotina do seu negócio — sem complicar o que precisa ser simples.</p><div className="hero-actions"><Link className="button button-primary" href="/cadastro">Começar gratuitamente <ChevronRight size={18} /></Link><a className="button button-quiet" href="#recursos">Conhecer recursos</a></div><p className="hero-proof"><Check size={16} /> Sem cartão. Acesso gratuito nesta fase.</p></div><DashboardPreview /></section>
+    <section className="marketing-section benefits" id="recursos"><div className="section-kicker"><p className="eyebrow">O ESSENCIAL, BEM RESOLVIDO</p><h2>Menos esforço para administrar. Mais presença no atendimento.</h2></div><div className="benefit-grid">{features.map(([title, description], index) => <article key={title}><span>0{index + 1}</span><h3>{title}</h3><p>{description}</p></article>)}</div></section>
+    <section className="marketing-section split-section"><div><p className="eyebrow">RECURSOS DISPONÍVEIS</p><h2>Uma agenda operacional de verdade.</h2><ul className="check-list"><li><Check />Agenda diária com grade configurável</li><li><Check />Clientes, serviços e histórico</li><li><Check />Disponibilidade, bloqueios e exceções</li><li><Check />Status, confirmação, cancelamento e reagendamento</li><li><Check />Lista de espera e recuperação de vagas</li><li><Check />Despesas, pacotes e fechamento diário</li></ul></div><div className="future-list"><p className="eyebrow">EM PREPARAÇÃO</p><h3>O que vem a seguir</h3><p>Relatórios avançados, página pública de agendamento por negócio, notificações por WhatsApp, integrações de pagamento e controles de plano serão liberados gradualmente.</p><p>Não apresentamos essas funções como disponíveis antes de estarem prontas.</p></div></section>
+    <section className="marketing-section how-section" id="como-funciona"><p className="eyebrow">COMO FUNCIONA</p><h2>Da conta à primeira agenda em poucos passos.</h2><ol>{["Crie sua conta", "Configure seu negócio", "Cadastre seus serviços", "Defina os horários", "Organize seus atendimentos"].map((item, index) => <li key={item}><span>{index + 1}</span>{item}</li>)}</ol></section>
+    <section className="marketing-section audience-section" id="para-quem"><p className="eyebrow">FEITO PARA ATENDIMENTO</p><h2>Flexível para quem trabalha com agenda.</h2><div>{["Salões de beleza", "Designers de sobrancelhas", "Lash designers", "Manicures", "Esteticistas", "Maquiadores", "Cabeleireiros", "Barbearias", "Profissionais autônomos", "Pequenos studios", "Clínicas de estética"].map((item) => <span key={item}>{item}</span>)}</div></section>
+    <section className="marketing-section security-section" id="seguranca"><LockKeyhole size={28} /><div><p className="eyebrow">SEGURANÇA E PRIVACIDADE</p><h2>Dados separados, acesso controlado.</h2><p>Cada registro operacional pertence a uma organização. As permissões são verificadas no servidor e as ações críticas deixam trilha de auditoria. Aplicamos validação de dados, cookies de sessão protegidos e controles contra tentativas excessivas de acesso.</p><Link href="/privacidade">Ler política de privacidade</Link></div></section>
+    <section className="marketing-section plans-section" id="planos"><p className="eyebrow">PLANOS</p><h2>Comece sem compromisso.</h2><article><span>Acesso antecipado</span><h3>Use gratuitamente nesta fase.</h3><p>Sem cartão e sem bloqueio de recursos enquanto construímos a melhor base para seu negócio.</p><Link className="button button-primary" href="/cadastro">Começar gratuitamente</Link></article><p className="plans-note">A estrutura de planos e limites já existe para a evolução futura. Valores não foram definidos.</p></section>
+    <section className="marketing-section faq-section" id="faq"><p className="eyebrow">DÚVIDAS FREQUENTES</p><h2>Respostas diretas antes de começar.</h2><div>{[["Preciso instalar alguma coisa?", "Não. O acesso é pelo navegador, no computador ou celular."],["Funciona no celular?", "Sim. As telas operacionais são responsivas e priorizam os fluxos do dia a dia."],["Posso usar gratuitamente?", "Sim, nesta fase de acesso antecipado não há cartão nem cobrança obrigatória."],["É indicado apenas para salões?", "Não. A estrutura atende profissionais e equipes que trabalham com horários."],["Meus dados ficam separados?", "Sim. Os dados operacionais são vinculados à organização e filtrados no servidor."],["Vai existir plano pago?", "A arquitetura está preparada para isso, mas não há cobrança ativa agora."]].map(([question, answer]) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></section>
+    <footer className="marketing-footer"><div><Link className="saas-logo" href="/">agenda<span>.</span></Link><p>Agenda e operação para negócios que atendem pessoas.</p></div><div><Link href="#recursos">Recursos</Link><Link href="#seguranca">Segurança</Link><Link href="/termos">Termos</Link><Link href="/privacidade">Privacidade</Link></div><div><Link href="/login">Entrar</Link><Link href="/cadastro">Criar conta</Link></div></footer>
+  </main>;
 }
 
-function formatCurrency(valueInCents: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valueInCents / 100);
-}
-
-function instagramLink(handle: string) {
-  return `https://instagram.com/${handle.replace(/^@/, "")}`;
-}
+function DashboardPreview() { return <div className="dashboard-preview" aria-label="Prévia ilustrativa do painel"><div className="preview-top"><span>Hoje, segunda-feira</span><i /></div><div className="preview-grid"><aside><span className="preview-logo">a.</span><span className="active" /><span /><span /><span /></aside><section><div className="preview-title"><strong>Agenda</strong><span>12 de agosto</span></div><div className="preview-appointments"><span>09:00</span><article><b>Design de sobrancelhas</b><small>Marina Alves · 50 min</small></article><span>10:00</span><article className="soft"><b>Horário livre</b><small>Próxima vaga disponível</small></article><span>11:00</span><article className="dark"><b>Extensão de cílios</b><small>Beatriz Lima · 1h 30</small></article></div></section></div></div>; }

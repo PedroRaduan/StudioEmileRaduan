@@ -4,11 +4,13 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { assertSameOrigin } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
+import { activateLegacyTenant } from "@/lib/tenancy/legacy";
 
 export type LinkActionState = { error?: string; success?: string };
 
 export async function processAppointmentLinkAction(_: LinkActionState, formData: FormData): Promise<LinkActionState> {
   await assertSameOrigin();
+  activateLegacyTenant();
   const rawToken = String(formData.get("token") ?? "");
   if (!/^[A-Za-z0-9_-]{40,60}$/.test(rawToken)) return { error: "Este link não é válido." };
   const reason = String(formData.get("reason") ?? "").trim().slice(0, 500);

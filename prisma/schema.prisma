@@ -9,7 +9,80 @@ datasource db {
 
 enum UserRole {
   OWNER
+  ADMIN
+  STAFF
   RECEPTIONIST
+}
+
+// Papéis pertencem ao vínculo entre uma pessoa e uma organização. O campo
+// User.role é mantido apenas para compatibilidade com a instalação legada.
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  STAFF
+  RECEPTIONIST
+}
+
+enum SubscriptionStatus {
+  FREE_BETA
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+}
+
+enum WaitlistStatus {
+  WAITING
+  MATCHED
+  OFFERED
+  ACCEPTED
+  EXPIRED
+  CLOSED
+}
+
+enum WaitlistPeriod {
+  ANY
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+enum WaitlistOfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  CANCELED
+}
+
+enum ExpenseStatus {
+  PENDING
+  PAID
+  VOID
+}
+
+enum DailyCloseStatus {
+  OPEN
+  FINALIZED
+}
+
+enum PackageStatus {
+  ACTIVE
+  EXHAUSTED
+  EXPIRED
+  CANCELED
+}
+
+enum CommissionType {
+  PERCENTAGE
+  FIXED
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  VOID
 }
 
 enum ClientStatus {
@@ -125,16 +198,120 @@ model User {
   isTemporary        Boolean    @default(false)
   twoFactorSecret    String?
   twoFactorEnabled   Boolean    @default(false)
+  emailVerifiedAt    DateTime?
   lastLoginAt        DateTime?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
   sessions           Session[]
+  memberships         OrganizationMembership[]
+  passwordResetTokens UserPasswordResetToken[]
+  emailVerificationTokens UserEmailVerificationToken[]
   appointments       Appointment[] @relation("AppointmentCreatedBy")
   appointmentEvents  AppointmentEvent[]
   paymentsConfirmed  Payment[]  @relation("PaymentConfirmedBy")
   messagesPrepared   MessageLog[]
   auditLogs          AuditLog[]
   agreements         AdminAgreement[]
+}
+
+model Organization {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  segment         String?
+  phone           String?
+  timezone        String   @default("America/Sao_Paulo")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  memberships     OrganizationMembership[]
+  subscriptions   Subscription[]
+  featureFlags    OrganizationFeatureFlag[]
+}
+
+model OrganizationMembership {
+  id              String           @id @default(cuid())
+  organizationId  String
+  userId          String
+  role            OrganizationRole @default(OWNER)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, userId])
+  @@index([userId, isActive])
+  @@index([organizationId, role])
+}
+
+model Plan {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  description     String?
+  priceCents      Int?
+  billingInterval String?
+  isPublic        Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  limits          Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  subscriptions   Subscription[]
+}
+
+model Subscription {
+  id                    String             @id @default(cuid())
+  organizationId        String
+  planId                String?
+  status                SubscriptionStatus @default(FREE_BETA)
+  provider              String?
+  providerCustomerId    String?
+  providerSubscriptionId String?
+  currentPeriodEndsAt   DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  organization          Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  plan                  Plan?              @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@unique([provider, providerSubscriptionId])
+}
+
+model OrganizationFeatureFlag {
+  id             String   @id @default(cuid())
+  organizationId String
+  key            String
+  enabled        Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, key])
+}
+
+model UserPasswordResetToken {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model UserEmailVerificationToken {
+  id          String   @id @default(cuid())
+  userId      String
+  tokenHash   String   @unique
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
 }
 
 model AdminAgreement {
@@ -154,6 +331,7 @@ model Session {
   id          String   @id @default(cuid())
   tokenHash   String   @unique
   userId      String
+  organizationId String?
   expiresAt   DateTime
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime @default(now())
@@ -162,6 +340,7 @@ model Session {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
+  @@index([organizationId, expiresAt])
 }
 
 model LoginAttempt {
@@ -185,7 +364,8 @@ model PublicRequest {
 }
 
 model StudioSettings {
-  id                    String   @id @default("studio")
+  id                    String   @id @default(cuid())
+  organizationId        String?  @unique
   studioName            String   @default("Emile Raduan Beauty Face")
   legalName             String?
   document              String?
@@ -224,17 +404,22 @@ model StudioSettings {
 
 model ServiceCategory {
   id          String    @id @default(cuid())
-  name        String    @unique
+  organizationId String?
+  name        String
   displayOrder Int      @default(0)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   services    Service[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, displayOrder])
 }
 
 model Service {
   id                     String    @id @default(cuid())
+  organizationId         String?
   categoryId             String?
-  name                   String    @unique
+  name                   String
   shortDescription       String?
   fullDescription        String?
   imageUrl               String?
@@ -262,11 +447,13 @@ model Service {
   appointments           Appointment[]
   bookingHolds           BookingHold[]
 
-  @@index([isActive, displayOrder])
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive, displayOrder])
 }
 
 model Client {
   id                    String             @id @default(cuid())
+  organizationId        String?
   fullName              String
   preferredName         String?
   birthDate             DateTime?          @db.Date
@@ -274,8 +461,8 @@ model Client {
   phoneNormalized       String?
   whatsapp              String?
   whatsappNormalized    String?
-  email                 String?            @unique
-  cpf                   String?            @unique
+  email                 String?
+  cpf                   String?
   instagram             String?
   addressLine1          String?
   addressLine2          String?
@@ -305,17 +492,20 @@ model Client {
   bookingHolds          BookingHold[]
   recoveryRequests      ClientRecoveryRequest[]
 
-  @@index([fullName])
-  @@index([phone])
-  @@index([phoneNormalized])
-  @@index([whatsapp])
-  @@index([whatsappNormalized])
-  @@index([status, createdAt])
-  @@index([lastAppointmentAt])
+  @@unique([organizationId, email])
+  @@unique([organizationId, cpf])
+  @@index([organizationId, fullName])
+  @@index([organizationId, phone])
+  @@index([organizationId, phoneNormalized])
+  @@index([organizationId, whatsapp])
+  @@index([organizationId, whatsappNormalized])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, lastAppointmentAt])
 }
 
 model ClientHealthProfile {
   id                    String   @id @default(cuid())
+  organizationId        String?
   clientId              String   @unique
   encryptedPayload      String
   encryptionKeyVersion  Int      @default(1)
@@ -325,17 +515,20 @@ model ClientHealthProfile {
 
 model ClientNote {
   id          String   @id @default(cuid())
+  organizationId String?
   clientId    String
   body        String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  @@index([clientId, createdAt])
+  @@index([organizationId, clientId, createdAt])
 }
 
 model CalendarResource {
   id          String        @id @default(cuid())
+  organizationId String?
+  membershipId  String?
   name        String
   isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
@@ -346,16 +539,18 @@ model CalendarResource {
   availabilityExceptions AvailabilityException[]
   bookingHolds BookingHold[]
 
-  @@index([isActive])
+  @@index([organizationId, isActive])
 }
 
 model Appointment {
   id                    String            @id @default(cuid())
-  code                  String            @unique
-  requestKey            String?           @unique
+  organizationId        String?
+  code                  String
+  requestKey            String?
   clientId              String
   serviceId             String
   resourceId            String
+  assignedMembershipId  String?
   createdByUserId       String?
   startsAt              DateTime
   endsAt                DateTime
@@ -381,15 +576,18 @@ model Appointment {
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
-  @@index([resourceId, startsAt])
-  @@index([clientId, startsAt])
-  @@index([status, startsAt])
+  @@unique([organizationId, code])
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, resourceId, startsAt])
+  @@index([organizationId, clientId, startsAt])
+  @@index([organizationId, status, startsAt])
 }
 
 model ClientAccount {
   id            String          @id @default(cuid())
+  organizationId String?
   clientId      String          @unique
-  email         String          @unique
+  email         String
   passwordHash  String
   isActive      Boolean         @default(true)
   verifiedAt    DateTime?
@@ -400,11 +598,13 @@ model ClientAccount {
   sessions      ClientSession[]
   resetTokens   ClientPasswordResetToken[]
 
-  @@index([isActive, createdAt])
+  @@unique([organizationId, email])
+  @@index([organizationId, isActive, createdAt])
 }
 
 model ClientPasswordResetToken {
   id          String        @id @default(cuid())
+  organizationId String?
   accountId   String
   tokenHash   String        @unique
   expiresAt   DateTime
@@ -417,6 +617,7 @@ model ClientPasswordResetToken {
 
 model ClientSession {
   id          String        @id @default(cuid())
+  organizationId String?
   tokenHash   String        @unique
   accountId   String
   expiresAt   DateTime
@@ -431,18 +632,20 @@ model ClientSession {
 
 model ClientRecoveryRequest {
   id          String                @id @default(cuid())
+  organizationId String?
   clientId    String
   status      RecoveryRequestStatus @default(OPEN)
   createdAt   DateTime              @default(now())
   resolvedAt  DateTime?
   client      Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  @@index([status, createdAt])
-  @@index([clientId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, clientId, createdAt])
 }
 
 model BookingHold {
   id              String            @id @default(cuid())
+  organizationId  String?
   tokenHash       String            @unique
   clientId        String?
   serviceId       String
@@ -459,12 +662,13 @@ model BookingHold {
   service         Service           @relation(fields: [serviceId], references: [id], onDelete: Cascade)
   resource        CalendarResource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
-  @@index([resourceId, startsAt])
-  @@index([status, expiresAt])
+  @@index([organizationId, resourceId, startsAt])
+  @@index([organizationId, status, expiresAt])
 }
 
 model AppointmentActionToken {
   id              String                   @id @default(cuid())
+  organizationId  String?
   appointmentId   String
   tokenHash       String                   @unique
   purpose         AppointmentActionPurpose
@@ -478,6 +682,7 @@ model AppointmentActionToken {
 
 model AppointmentEvent {
   id              String      @id @default(cuid())
+  organizationId  String?
   appointmentId   String
   actorUserId     String?
   type            String
@@ -489,11 +694,12 @@ model AppointmentEvent {
   appointment     Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   actor           User?       @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
-  @@index([appointmentId, createdAt])
+  @@index([organizationId, appointmentId, createdAt])
 }
 
 model AvailabilityRule {
   id              String   @id @default(cuid())
+  organizationId  String?
   resourceId      String
   dayOfWeek       Int
   startsAtMinute  Int
@@ -503,11 +709,12 @@ model AvailabilityRule {
   isEnabled       Boolean  @default(true)
   resource        CalendarResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
-  @@unique([resourceId, dayOfWeek])
+  @@unique([organizationId, resourceId, dayOfWeek])
 }
 
 model AvailabilityException {
   id              String   @id @default(cuid())
+  organizationId  String?
   resourceId      String
   date            DateTime @db.Date
   startsAtMinute  Int?
@@ -516,11 +723,12 @@ model AvailabilityException {
   note            String?
   resource        CalendarResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
-  @@unique([resourceId, date])
+  @@unique([organizationId, resourceId, date])
 }
 
 model ScheduleBlock {
   id          String           @id @default(cuid())
+  organizationId String?
   resourceId  String
   startsAt    DateTime
   endsAt      DateTime
@@ -529,18 +737,21 @@ model ScheduleBlock {
   createdAt   DateTime         @default(now())
   resource    CalendarResource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
 
-  @@index([resourceId, startsAt])
+  @@index([organizationId, resourceId, startsAt])
 }
 
 model Holiday {
   id          String   @id @default(cuid())
-  date        DateTime @unique @db.Date
+  organizationId String?
+  date        DateTime @db.Date
   name        String
   isClosed    Boolean  @default(true)
+  @@unique([organizationId, date])
 }
 
 model Payment {
   id                 String        @id @default(cuid())
+  organizationId     String?
   appointmentId      String        @unique
   clientId           String
   amountDueCents     Int?
@@ -561,11 +772,12 @@ model Payment {
   confirmedBy        User?         @relation("PaymentConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
   events             PaymentEvent[]
 
-  @@index([clientId, status])
+  @@index([organizationId, clientId, status])
 }
 
 model PaymentEvent {
   id          String   @id @default(cuid())
+  organizationId String?
   paymentId   String
   type        String
   previousValue Json?
@@ -573,21 +785,174 @@ model PaymentEvent {
   createdAt   DateTime @default(now())
   payment     Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
 
-  @@index([paymentId, createdAt])
+  @@index([organizationId, paymentId, createdAt])
+}
+
+model WaitlistEntry {
+  id                    String         @id @default(cuid())
+  organizationId        String?
+  clientId              String
+  serviceId             String
+  preferredResourceId   String?
+  preferredDays         Int[]          @default([])
+  preferredPeriod       WaitlistPeriod @default(ANY)
+  earliestDate          DateTime?      @db.Date
+  latestDate            DateTime?      @db.Date
+  note                  String?
+  status                WaitlistStatus @default(WAITING)
+  matchedAt             DateTime?
+  offeredAt             DateTime?
+  acceptedAt            DateTime?
+  closedAt              DateTime?
+  createdByUserId       String?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([organizationId, status, serviceId, createdAt])
+  @@index([organizationId, clientId, status])
+}
+
+model WaitlistOffer {
+  id                    String              @id @default(cuid())
+  organizationId        String?
+  waitlistEntryId       String
+  sourceAppointmentId   String?
+  resourceId            String
+  serviceId             String
+  clientId              String
+  startsAt              DateTime
+  endsAt                DateTime
+  occupiedFrom          DateTime
+  occupiedUntil         DateTime
+  tokenHash             String              @unique
+  status                WaitlistOfferStatus @default(PENDING)
+  expiresAt             DateTime
+  acceptedAppointmentId String?
+  createdByUserId       String?
+  createdAt             DateTime            @default(now())
+  resolvedAt            DateTime?
+
+  @@index([organizationId, status, expiresAt])
+  @@index([organizationId, resourceId, startsAt])
+  @@index([organizationId, waitlistEntryId, createdAt])
+}
+
+model Expense {
+  id              String        @id @default(cuid())
+  organizationId  String?
+  category        String
+  description     String
+  amountCents     Int
+  occurredAt      DateTime
+  status          ExpenseStatus @default(PAID)
+  paymentMethod   PaymentMethod?
+  paidByMemberId  String?
+  createdByUserId String?
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  @@index([organizationId, occurredAt])
+  @@index([organizationId, status, occurredAt])
+}
+
+model DailyCashClose {
+  id                String           @id @default(cuid())
+  organizationId    String?
+  date              DateTime         @db.Date
+  status            DailyCloseStatus @default(OPEN)
+  expectedCents     Int              @default(0)
+  actualCents       Int?
+  differenceCents   Int?
+  note              String?
+  closedByUserId    String?
+  closedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@unique([organizationId, date])
+}
+
+model ServicePackage {
+  id                String        @id @default(cuid())
+  organizationId    String?
+  clientId          String
+  serviceId         String
+  name              String
+  totalSessions     Int
+  remainingSessions Int
+  priceCents        Int?
+  purchasedAt       DateTime      @default(now())
+  expiresAt         DateTime?
+  status            PackageStatus @default(ACTIVE)
+  createdByUserId   String?
+  note              String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  @@index([organizationId, clientId, serviceId, status])
+}
+
+model PackageRedemption {
+  id               String   @id @default(cuid())
+  organizationId   String?
+  servicePackageId String
+  appointmentId    String   @unique
+  clientId         String
+  serviceId        String
+  redeemedAt       DateTime @default(now())
+  createdByUserId  String?
+
+  @@index([organizationId, servicePackageId, redeemedAt])
+}
+
+model CommissionRule {
+  id                    String         @id @default(cuid())
+  organizationId        String?
+  membershipId          String?
+  serviceId             String?
+  commissionType        CommissionType
+  value                 Int
+  isActive              Boolean        @default(true)
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([organizationId, membershipId, serviceId, isActive])
+}
+
+model CommissionEntry {
+  id                    String           @id @default(cuid())
+  organizationId        String?
+  appointmentId         String           @unique
+  membershipId          String
+  serviceId             String
+  baseAmountCents       Int
+  amountCents           Int
+  ruleId                String?
+  status                CommissionStatus @default(PENDING)
+  generatedAt           DateTime         @default(now())
+  paidAt                DateTime?
+  paidByUserId          String?
+
+  @@index([organizationId, membershipId, status, generatedAt])
 }
 
 model MessageTemplate {
   id          String         @id @default(cuid())
-  name        String         @unique
+  organizationId String?
+  name        String
   channel     MessageChannel @default(WHATSAPP)
   body        String
   isActive    Boolean        @default(true)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+  @@unique([organizationId, name])
 }
 
 model MessageLog {
   id              String        @id @default(cuid())
+  organizationId  String?
   clientId        String
   preparedByUserId String?
   appointmentId   String?
@@ -600,11 +965,12 @@ model MessageLog {
   client          Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   preparedBy      User?         @relation(fields: [preparedByUserId], references: [id], onDelete: SetNull)
 
-  @@index([clientId, createdAt])
+  @@index([organizationId, clientId, createdAt])
 }
 
 model Document {
   id          String   @id @default(cuid())
+  organizationId String?
   type        ConsentType
   title       String
   version     String
@@ -615,11 +981,12 @@ model Document {
   updatedAt   DateTime @updatedAt
   consents    Consent[]
 
-  @@unique([type, version])
+  @@unique([organizationId, type, version])
 }
 
 model Consent {
   id          String      @id @default(cuid())
+  organizationId String?
   clientId    String
   documentId  String
   granted     Boolean
@@ -629,11 +996,12 @@ model Consent {
   client      Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
   document    Document    @relation(fields: [documentId], references: [id], onDelete: Restrict)
 
-  @@index([clientId, grantedAt])
+  @@index([organizationId, clientId, grantedAt])
 }
 
 model PrivacyRequest {
   id          String               @id @default(cuid())
+  organizationId String?
   clientId    String
   type        PrivacyRequestType
   status      PrivacyRequestStatus @default(OPEN)
@@ -643,11 +1011,12 @@ model PrivacyRequest {
   updatedAt   DateTime             @updatedAt
   client      Client               @relation(fields: [clientId], references: [id], onDelete: Restrict)
 
-  @@index([status, createdAt])
+  @@index([organizationId, status, createdAt])
 }
 
 model AuditLog {
   id          String   @id @default(cuid())
+  organizationId String?
   userId      String?
   action      String
   entityType  String
@@ -658,6 +1027,6 @@ model AuditLog {
   createdAt   DateTime @default(now())
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  @@index([entityType, entityId, createdAt])
-  @@index([userId, createdAt])
+  @@index([organizationId, entityType, entityId, createdAt])
+  @@index([organizationId, userId, createdAt])
 }

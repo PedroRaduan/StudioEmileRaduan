@@ -9,8 +9,10 @@ import { BookingError } from "./hold";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 import { normalizeBrazilianPhone } from "@/lib/clients/phone";
+import { activateLegacyTenant } from "@/lib/tenancy/legacy";
 
 export async function confirmBookingHold(input: { clientId?: string; guest?: { fullName: string; whatsapp: string; email: string | null } }) {
+  activateLegacyTenant();
   const cookieStore = await cookies();
   const token = cookieStore.get(BOOKING_HOLD_COOKIE)?.value;
   if (!token) throw new BookingError("Sua reserva temporária expirou. Escolha o horário novamente.");

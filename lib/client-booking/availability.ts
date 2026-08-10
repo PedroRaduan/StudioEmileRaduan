@@ -4,12 +4,14 @@ import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
 import { generateAvailableSlots } from "./slot-rules";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
+import { activateLegacyTenant } from "@/lib/tenancy/legacy";
 
 export { generateAvailableSlots, type AvailableSlot } from "./slot-rules";
 
 export const BOOKING_HOLD_COOKIE = "erbf_booking_hold";
 
 export async function getAvailableSlots(serviceId: string, date: string) {
+  activateLegacyTenant();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !process.env.DATABASE_URL) return [];
   const prisma = getPrisma();
   await prisma.bookingHold.updateMany({ where: { status: "ACTIVE", expiresAt: { lte: new Date() } }, data: { status: "EXPIRED" } });
@@ -29,9 +31,9 @@ export async function getAvailableSlots(serviceId: string, date: string) {
   const currentHold = (await cookies()).get(BOOKING_HOLD_COOKIE)?.value;
 
   const [rule, exception, holiday, appointments, blocks, holds] = await Promise.all([
-    prisma.availabilityRule.findUnique({ where: { resourceId_dayOfWeek: { resourceId: resource.id, dayOfWeek: weekday } } }),
-    prisma.availabilityException.findUnique({ where: { resourceId_date: { resourceId: resource.id, date: dayStart } } }),
-    prisma.holiday.findUnique({ where: { date: dayStart } }),
+    prisma.availabilityRule.findFirst({ where: { resourceId: resource.id, dayOfWeek: weekday } }),
+    prisma.availabilityException.findFirst({ where: { resourceId: resource.id, date: dayStart } }),
+    prisma.holiday.findFirst({ where: { date: dayStart } }),
     prisma.appointment.findMany({ where: { resourceId: resource.id, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: dayEnd }, occupiedUntil: { gt: dayStart } }, select: { occupiedFrom: true, occupiedUntil: true } }),
     prisma.scheduleBlock.findMany({ where: { resourceId: resource.id, startsAt: { lt: dayEnd }, endsAt: { gt: dayStart } }, select: { startsAt: true, endsAt: true } }),
     prisma.bookingHold.findMany({ where: { resourceId: resource.id, status: "ACTIVE", expiresAt: { gt: new Date() }, ...(currentHold ? { tokenHash: { not: sha256(currentHold) } } : {}), occupiedFrom: { lt: dayEnd }, occupiedUntil: { gt: dayStart } }, select: { occupiedFrom: true, occupiedUntil: true } }),

@@ -8,9 +8,10 @@ import { assertSameOrigin, hashIp } from "@/lib/auth/session";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { isAuthRateLimited, recordAuthAttempt } from "@/lib/auth/rate-limit";
 import { createClientSession, destroyClientSession, requireClient, safeReturnTo } from "@/lib/client-auth/session";
-import { getPrisma } from "@/lib/db/prisma";
+import { getPrisma, getSystemPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
 import { normalizeBrazilianPhone } from "@/lib/clients/phone";
+import { activateLegacyTenant, LEGACY_ORGANIZATION_ID } from "@/lib/tenancy/legacy";
 
 export type ClientAuthState = { error?: string; success?: string };
 
@@ -32,20 +33,21 @@ export async function clientLoginAction(_: ClientAuthState, formData: FormData):
   const parsed = loginSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise os dados informados." };
 
-  const prisma = getPrisma();
+  const prisma = getSystemPrisma();
   const identifierHash = sha256(`client:${parsed.data.email}`);
   const requestHeaders = await headers();
   const ipHash = hashIp(requestHeaders.get("x-forwarded-for") ?? requestHeaders.get("x-real-ip"));
   if (await isAuthRateLimited({ identifierHash, ipHash })) return { error: "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente." };
 
-  const account = await prisma.clientAccount.findUnique({ where: { email: parsed.data.email }, include: { client: true } });
+  const account = await prisma.clientAccount.findFirst({ where: { organizationId: LEGACY_ORGANIZATION_ID, email: parsed.data.email }, include: { client: true } });
   const passwordMatches = await verifyPassword(account?.passwordHash, parsed.data.password);
   const isValid = Boolean(account?.isActive && !account.client.deletedAt && passwordMatches);
   await recordAuthAttempt(identifierHash, ipHash, isValid);
   if (!account || !isValid) return { error: "E-mail ou senha incorretos." };
 
   await prisma.clientAccount.update({ where: { id: account.id }, data: { lastLoginAt: new Date() } });
-  await createClientSession(account.id);
+  if (!account.organizationId) return { error: "Não foi possível iniciar sua sessão agora." };
+  await createClientSession(account.id, account.organizationId);
   redirect(safeReturnTo(parsed.data.returnTo));
 }
 
@@ -67,8 +69,9 @@ export async function clientSignupAction(_: ClientAuthState, formData: FormData)
   const parsed = signupSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise os dados informados." };
 
+  activateLegacyTenant();
   const prisma = getPrisma();
-  const existing = await prisma.client.findUnique({ where: { email: parsed.data.email }, include: { account: true } });
+  const existing = await prisma.client.findFirst({ where: { email: parsed.data.email }, include: { account: true } });
   if (existing?.account) return { error: "Já existe uma conta com este e-mail. Entre com sua senha." };
   if (existing) return { error: "Seu cadastro já existe no studio. Fale com a equipe para ativar o acesso com segurança." };
 
@@ -108,7 +111,7 @@ export async function clientSignupAction(_: ClientAuthState, formData: FormData)
     return { error: "Não foi possível criar sua conta agora. Tente novamente." };
   }
 
-  await createClientSession(account.id);
+  await createClientSession(account.id, LEGACY_ORGANIZATION_ID);
   redirect(safeReturnTo(parsed.data.returnTo));
 }
 
@@ -119,8 +122,9 @@ export async function requestRecoveryAction(_: ClientAuthState, formData: FormDa
   const parsed = recoverySchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Informe seu e-mail." };
   if (process.env.DATABASE_URL) {
+    activateLegacyTenant();
     const prisma = getPrisma();
-    const account = await prisma.clientAccount.findUnique({ where: { email: parsed.data.email } });
+    const account = await prisma.clientAccount.findFirst({ where: { email: parsed.data.email } });
     if (account) {
       const recent = await prisma.clientRecoveryRequest.findFirst({ where: { clientId: account.clientId, status: "OPEN", createdAt: { gt: new Date(Date.now() - 24 * 60 * 60 * 1000) } } });
       if (!recent) await prisma.clientRecoveryRequest.create({ data: { clientId: account.clientId } });

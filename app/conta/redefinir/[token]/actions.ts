@@ -6,7 +6,7 @@ import { z } from "zod";
 import { assertSameOrigin } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
 import { createClientSession } from "@/lib/client-auth/session";
-import { getPrisma } from "@/lib/db/prisma";
+import { getSystemPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
 
 export type ResetState = { error?: string };
@@ -21,8 +21,8 @@ export async function resetClientPasswordAction(_: ResetState, formData: FormDat
   const parsed = resetSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revise a nova senha." };
   const passwordHash = await hashPassword(parsed.data.password);
-  const prisma = getPrisma();
-  let accountId: string;
+  const prisma = getSystemPrisma();
+  let accountId: { accountId: string; organizationId: string };
   try {
     accountId = await prisma.$transaction(async (tx) => {
       const token = await tx.clientPasswordResetToken.findUnique({ where: { tokenHash: sha256(parsed.data.token) }, include: { account: true } });
@@ -33,12 +33,13 @@ export async function resetClientPasswordAction(_: ResetState, formData: FormDat
       await tx.clientSession.deleteMany({ where: { accountId: token.accountId } });
       await tx.clientRecoveryRequest.updateMany({ where: { clientId: token.account.clientId, status: { in: ["OPEN", "CONTACTED"] } }, data: { status: "RESOLVED", resolvedAt: new Date() } });
       await tx.auditLog.create({ data: { action: "CLIENT_PASSWORD_RESET", entityType: "Client", entityId: token.account.clientId } });
-      return token.accountId;
+      if (!token.organizationId) throw new Error("INVALID_TOKEN");
+      return { accountId: token.accountId, organizationId: token.organizationId };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (error) {
     if (error instanceof Error && error.message === "INVALID_TOKEN") return { error: "Este link expirou ou já foi utilizado. Solicite um novo ao studio." };
     return { error: "Não foi possível atualizar sua senha agora." };
   }
-  await createClientSession(accountId);
+  await createClientSession(accountId.accountId, accountId.organizationId);
   redirect("/conta");
 }

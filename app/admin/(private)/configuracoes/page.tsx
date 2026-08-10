@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, CalendarOff, CalendarRange, ChevronRight, FileText, KeyRound, MessageCircle, Users } from "lucide-react";
+import { CalendarClock, CalendarOff, CalendarRange, ChevronRight, Download, FileText, KeyRound, MessageCircle, Users } from "lucide-react";
 import { getStudioSettings } from "@/lib/admin/settings";
 import { SettingsForm } from "./settings-form";
 
@@ -11,6 +11,7 @@ const areas = [
   { href: "/admin/configuracoes/mensagens", icon: MessageCircle, title: "Modelos de mensagens", description: "Textos usados na preparação manual de lembretes." },
   { href: "/admin/configuracoes/termos", icon: FileText, title: "Termos e consentimentos", description: "Documentos versionados e aceites rastreáveis." },
   { href: "/admin/configuracoes/equipe", icon: Users, title: "Equipe e permissões", description: "Crie acessos restritos para recepcionistas." },
+  { href: "/admin/configuracoes/instalar-app", icon: Download, title: "Instalar aplicativo", description: "Use a agenda como app no celular ou computador." },
 ];
 
 export default async function SettingsPage() {

@@ -8,10 +8,12 @@ import { sha256 } from "@/lib/security/hash";
 import { BOOKING_HOLD_COOKIE } from "./availability";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
+import { activateLegacyTenant } from "@/lib/tenancy/legacy";
 
 export class BookingError extends Error {}
 
 export async function createBookingHold(input: { serviceId: string; date: string; time: string; clientId?: string }) {
+  activateLegacyTenant();
   const token = randomBytes(32).toString("base64url");
   const tokenHash = sha256(token);
   const previousToken = (await cookies()).get(BOOKING_HOLD_COOKIE)?.value;
@@ -45,9 +47,9 @@ export async function createBookingHold(input: { serviceId: string; date: string
       const endMinute = startMinute + service.durationMinutes;
       const timing = occupiedWindow(startsAt, service);
       const [rule, exception, holiday, block, appointment, otherHold] = await Promise.all([
-        tx.availabilityRule.findUnique({ where: { resourceId_dayOfWeek: { resourceId: resource.id, dayOfWeek: weekday } } }),
-        tx.availabilityException.findUnique({ where: { resourceId_date: { resourceId: resource.id, date: dateOnly } } }),
-        tx.holiday.findUnique({ where: { date: dateOnly } }),
+        tx.availabilityRule.findFirst({ where: { resourceId: resource.id, dayOfWeek: weekday } }),
+        tx.availabilityException.findFirst({ where: { resourceId: resource.id, date: dateOnly } }),
+        tx.holiday.findFirst({ where: { date: dateOnly } }),
         tx.scheduleBlock.findFirst({ where: { resourceId: resource.id, startsAt: { lt: timing.occupiedUntil }, endsAt: { gt: timing.occupiedFrom } } }),
         tx.appointment.findFirst({ where: { resourceId: resource.id, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
         tx.bookingHold.findFirst({ where: { resourceId: resource.id, status: "ACTIVE", expiresAt: { gt: now }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
@@ -74,6 +76,7 @@ export async function createBookingHold(input: { serviceId: string; date: string
 }
 
 export async function getCurrentBookingHold() {
+  activateLegacyTenant();
   const token = (await cookies()).get(BOOKING_HOLD_COOKIE)?.value;
   if (!token || !process.env.DATABASE_URL) return null;
   const hold = await getPrisma().bookingHold.findUnique({ where: { tokenHash: sha256(token) }, include: { service: true, resource: true } });
@@ -85,6 +88,7 @@ export async function getCurrentBookingHold() {
 }
 
 export async function getCompletedBookingHold() {
+  activateLegacyTenant();
   const token = (await cookies()).get(BOOKING_HOLD_COOKIE)?.value;
   if (!token || !process.env.DATABASE_URL) return null;
   return getPrisma().bookingHold.findFirst({
@@ -94,6 +98,7 @@ export async function getCompletedBookingHold() {
 }
 
 export async function releaseCurrentBookingHold() {
+  activateLegacyTenant();
   const cookieStore = await cookies();
   const token = cookieStore.get(BOOKING_HOLD_COOKIE)?.value;
   if (token && process.env.DATABASE_URL) await getPrisma().bookingHold.updateMany({ where: { tokenHash: sha256(token), status: "ACTIVE" }, data: { status: "RELEASED" } });

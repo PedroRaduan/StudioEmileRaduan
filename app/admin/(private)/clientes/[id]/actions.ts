@@ -1,7 +1,6 @@
 "use server";
 
 import { randomBytes } from "node:crypto";
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertSameOrigin, requireOwner, requirePermission } from "@/lib/auth/session";
@@ -85,11 +84,8 @@ export async function prepareClientAccessAction(_: ClientProfileState, formData:
     prisma.clientRecoveryRequest.updateMany({ where: { clientId: client.id, status: "OPEN" }, data: { status: "CONTACTED" } }),
     prisma.auditLog.create({ data: { userId: owner.id, action: "CLIENT_ACCESS_LINK_CREATED", entityType: "Client", entityId: client.id } }),
   ]);
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   revalidatePath(`/admin/clientes/${client.id}`);
-  return { success: "Link seguro criado. Ele expira em 2 horas e funciona uma única vez.", link: `${protocol}://${host}/conta/redefinir/${rawToken}` };
+  return { success: "Link seguro criado. Ele expira em 2 horas e funciona uma única vez.", link: `${process.env.APP_URL ?? "http://localhost:3000"}/conta/redefinir/${rawToken}` };
 }
 
 const noteSchema = z.object({ clientId: z.string().cuid(), body: z.string().trim().min(2, "Escreva a observação.").max(4000) });

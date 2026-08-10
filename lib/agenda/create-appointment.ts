@@ -3,7 +3,8 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { dateInTimezone, dateKeyInTimezone, weekdayInTimezone } from "@/lib/date-time";
 import { getPrisma } from "@/lib/db/prisma";
 import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
-import { CURRENT_STUDIO_ID, DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
+import { DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
+import { requireTenantContext } from "@/lib/tenancy/context";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
@@ -22,11 +23,12 @@ export type CreateAppointmentInput = {
 
 export async function createAppointment(input: CreateAppointmentInput) {
   const prisma = getPrisma();
+  const { organizationId } = requireTenantContext();
 
   try {
     return await prisma.$transaction(async (tx) => {
       if (input.requestKey) {
-        const duplicate = await tx.appointment.findUnique({ where: { requestKey: input.requestKey } });
+        const duplicate = await tx.appointment.findFirst({ where: { requestKey: input.requestKey } });
         if (duplicate) return { appointment: duplicate, availabilityWarning: null };
       }
 
@@ -34,7 +36,7 @@ export async function createAppointment(input: CreateAppointmentInput) {
         tx.client.findFirst({ where: { id: input.clientId, deletedAt: null } }),
         tx.service.findFirst({ where: { id: input.serviceId, isActive: true } }),
         tx.calendarResource.findFirst({ where: { id: input.resourceId, isActive: true } }),
-        tx.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } }),
+        tx.studioSettings.findUnique({ where: { organizationId } }),
       ]);
       if (!client) throw new SchedulingError("A cliente selecionada não está disponível.");
       if (client.status === "BLOCKED") throw new SchedulingError("Esta cliente está bloqueada para novos agendamentos.");
@@ -57,9 +59,9 @@ export async function createAppointment(input: CreateAppointmentInput) {
 
       await tx.bookingHold.updateMany({ where: { status: "ACTIVE", expiresAt: { lte: new Date() } }, data: { status: "EXPIRED" } });
       const [rule, exception, holiday, block, conflict, holdConflict] = await Promise.all([
-        tx.availabilityRule.findUnique({ where: { resourceId_dayOfWeek: { resourceId: resource.id, dayOfWeek: weekday } } }),
-        tx.availabilityException.findUnique({ where: { resourceId_date: { resourceId: resource.id, date: dateOnly } } }),
-        tx.holiday.findUnique({ where: { date: dateOnly } }),
+        tx.availabilityRule.findFirst({ where: { resourceId: resource.id, dayOfWeek: weekday } }),
+        tx.availabilityException.findFirst({ where: { resourceId: resource.id, date: dateOnly } }),
+        tx.holiday.findFirst({ where: { date: dateOnly } }),
         tx.scheduleBlock.findFirst({ where: { resourceId: resource.id, startsAt: { lt: timing.occupiedUntil }, endsAt: { gt: timing.occupiedFrom } } }),
         tx.appointment.findFirst({
           where: {

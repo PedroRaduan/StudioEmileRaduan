@@ -2,10 +2,12 @@ import { randomBytes } from "node:crypto";
 import type { AppointmentActionPurpose } from "@/app/generated/prisma/client";
 import { getPrisma } from "@/lib/db/prisma";
 import { sha256 } from "@/lib/security/hash";
+import { activateLegacyTenant } from "@/lib/tenancy/legacy";
 
 const purposes: AppointmentActionPurpose[] = ["CONFIRM", "CANCEL", "RESCHEDULE"];
 
 export async function createAppointmentActionLinks(appointmentId: string, origin: string) {
+  activateLegacyTenant();
   const prisma = getPrisma();
   const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId }, select: { startsAt: true } });
   if (!appointment || appointment.startsAt <= new Date()) return null;
@@ -18,6 +20,7 @@ export async function createAppointmentActionLinks(appointmentId: string, origin
 }
 
 export function validActionToken(rawToken: string) {
+  activateLegacyTenant();
   return getPrisma().appointmentActionToken.findUnique({
     where: { tokenHash: sha256(rawToken) },
     include: { appointment: { include: { client: true, service: true } } },

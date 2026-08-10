@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
-import { STUDIO_BRAND } from "@/lib/studio-config";
 import { FormValueGuard } from "@/components/form-value-guard";
 
 export const viewport: Viewport = {
@@ -10,19 +8,16 @@ export const viewport: Viewport = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const metadataBase = new URL(`${protocol}://${host}`);
+  const metadataBase = safeMetadataBase();
 
   return {
     metadataBase,
     title: {
-      default: STUDIO_BRAND.name,
-      template: `%s | ${STUDIO_BRAND.name}`,
+      default: "Agenda — gestão de horários e clientes",
+      template: "%s | Agenda",
     },
-    description: "Agenda e cuidados personalizados.",
-    applicationName: STUDIO_BRAND.name,
+    description: "Organize horários, clientes e atendimento em uma plataforma feita para negócios de agenda.",
+    applicationName: "Agenda",
     icons: {
       icon: "/icon-192.png",
       apple: "/icon-192.png",
@@ -30,17 +25,28 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type: "website",
       locale: "pt_BR",
-      title: STUDIO_BRAND.name,
-      description: "Agenda e cuidados personalizados.",
-      images: [{ url: "/og.png", width: 1800, height: 1000, alt: STUDIO_BRAND.name }],
+      title: "Agenda — gestão de horários e clientes",
+      description: "Organize horários, clientes e atendimento em uma só plataforma.",
     },
     twitter: {
       card: "summary_large_image",
-      title: STUDIO_BRAND.name,
-      description: "Agenda e cuidados personalizados.",
-      images: ["/og.png"],
+      title: "Agenda — gestão de horários e clientes",
+      description: "Organize horários, clientes e atendimento em uma só plataforma.",
     },
   };
+}
+
+function safeMetadataBase() {
+  const candidate = process.env.APP_URL;
+  if (candidate) {
+    try {
+      const parsed = new URL(candidate);
+      if ((parsed.protocol === "https:" || parsed.hostname === "localhost") && !parsed.username && !parsed.password) return parsed;
+    } catch {
+      // Usa o fallback local sem refletir cabeçalhos controlados pela requisição.
+    }
+  }
+  return new URL("http://localhost:3000");
 }
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

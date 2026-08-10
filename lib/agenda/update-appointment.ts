@@ -3,12 +3,14 @@ import { dateInTimezone, dateKeyInTimezone, weekdayInTimezone } from "@/lib/date
 import { getPrisma } from "@/lib/db/prisma";
 import { isInsideWorkingHours, occupiedWindow } from "@/lib/agenda/rules";
 import { SchedulingError } from "@/lib/agenda/create-appointment";
-import { CURRENT_STUDIO_ID, DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
+import { DEFAULT_STUDIO_TIMEZONE } from "@/lib/studio-config";
+import { requireTenantContext } from "@/lib/tenancy/context";
 import { isSchedulingConflictError } from "@/lib/agenda/conflict-error";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/agenda/status";
 
 export async function rescheduleAppointment(input: { appointmentId: string; date: string; time: string; reason: string; actorUserId: string }) {
   const prisma = getPrisma();
+  const { organizationId } = requireTenantContext();
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -16,7 +18,7 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
       if (!appointment) throw new SchedulingError("Agendamento não encontrado.");
       if (["COMPLETED", "CANCELED"].includes(appointment.status)) throw new SchedulingError("Este atendimento não pode mais ser reagendado.");
 
-      const settings = await tx.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } });
+      const settings = await tx.studioSettings.findUnique({ where: { organizationId } });
       const timezone = settings?.timezone ?? DEFAULT_STUDIO_TIMEZONE;
       const startsAt = dateInTimezone(input.date, input.time, timezone);
       if (startsAt <= new Date()) throw new SchedulingError("Escolha um horário futuro.");
@@ -32,9 +34,9 @@ export async function rescheduleAppointment(input: { appointmentId: string; date
       const dateOnly = dateInTimezone(localDate, "00:00", timezone);
       await tx.bookingHold.updateMany({ where: { status: "ACTIVE", expiresAt: { lte: new Date() } }, data: { status: "EXPIRED" } });
       const [rule, exception, holiday, block, conflict, holdConflict] = await Promise.all([
-        tx.availabilityRule.findUnique({ where: { resourceId_dayOfWeek: { resourceId: appointment.resourceId, dayOfWeek: weekday } } }),
-        tx.availabilityException.findUnique({ where: { resourceId_date: { resourceId: appointment.resourceId, date: dateOnly } } }),
-        tx.holiday.findUnique({ where: { date: dateOnly } }),
+        tx.availabilityRule.findFirst({ where: { resourceId: appointment.resourceId, dayOfWeek: weekday } }),
+        tx.availabilityException.findFirst({ where: { resourceId: appointment.resourceId, date: dateOnly } }),
+        tx.holiday.findFirst({ where: { date: dateOnly } }),
         tx.scheduleBlock.findFirst({ where: { resourceId: appointment.resourceId, startsAt: { lt: timing.occupiedUntil }, endsAt: { gt: timing.occupiedFrom } } }),
         tx.appointment.findFirst({ where: { id: { not: appointment.id }, resourceId: appointment.resourceId, status: { in: ACTIVE_APPOINTMENT_STATUSES }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),
         tx.bookingHold.findFirst({ where: { resourceId: appointment.resourceId, status: "ACTIVE", expiresAt: { gt: new Date() }, occupiedFrom: { lt: timing.occupiedUntil }, occupiedUntil: { gt: timing.occupiedFrom } } }),

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { assertSameOrigin, requireOwner } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
-import { CURRENT_STUDIO_ID } from "@/lib/studio-config";
+import { requireTenantContext } from "@/lib/tenancy/context";
 
 export type SettingsFormState = { error?: string; success?: string };
 const optionalText = z.string().trim().max(4000).optional().transform((value) => value || null);
@@ -29,8 +29,8 @@ export async function saveSettingsAction(_: SettingsFormState, formData: FormDat
   if (!parsed.success) return { error: "Revise as informações do studio." };
   try {
     await getPrisma().$transaction([
-      getPrisma().studioSettings.upsert({ where: { id: CURRENT_STUDIO_ID }, create: { id: CURRENT_STUDIO_ID, ...parsed.data }, update: parsed.data }),
-      getPrisma().auditLog.create({ data: { userId: owner.id, action: "SETTINGS_UPDATED", entityType: "StudioSettings", entityId: CURRENT_STUDIO_ID } }),
+      getPrisma().studioSettings.upsert({ where: { organizationId: requireTenantContext().organizationId }, create: { ...parsed.data }, update: parsed.data }),
+      getPrisma().auditLog.create({ data: { userId: owner.id, action: "SETTINGS_UPDATED", entityType: "StudioSettings", entityId: requireTenantContext().organizationId } }),
     ]);
     revalidatePath("/"); revalidatePath("/agendar"); revalidatePath("/admin/configuracoes");
     return { success: "Configurações salvas." };
@@ -57,8 +57,8 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
     const prisma = getPrisma();
     await prisma.$transaction([
       prisma.studioSettings.upsert({
-        where: { id: CURRENT_STUDIO_ID },
-        create: { id: CURRENT_STUDIO_ID, calendarSlotInterval: parsed.data.calendarSlotInterval },
+        where: { organizationId: requireTenantContext().organizationId },
+        create: { calendarSlotInterval: parsed.data.calendarSlotInterval },
         update: { calendarSlotInterval: parsed.data.calendarSlotInterval },
       }),
       prisma.auditLog.create({
@@ -66,7 +66,7 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
           userId: owner.id,
           action: "CALENDAR_GRID_UPDATED",
           entityType: "StudioSettings",
-          entityId: CURRENT_STUDIO_ID,
+          entityId: requireTenantContext().organizationId,
           after: { calendarSlotInterval: parsed.data.calendarSlotInterval },
         },
       }),
@@ -80,7 +80,7 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
 }
 
 export async function saveHoursAction(_: SettingsFormState, formData: FormData): Promise<SettingsFormState> {
-  await assertSameOrigin(); const owner = await requireOwner(); const prisma = getPrisma(); const resourceId = String(formData.get("resourceId") ?? "");
+  await assertSameOrigin(); const owner = await requireOwner(); const prisma = getPrisma(); const organizationId = requireTenantContext().organizationId; const resourceId = String(formData.get("resourceId") ?? "");
   const resource = await prisma.calendarResource.findFirst({ where: { id: resourceId, isActive: true } });
   if (!resource) return { error: "Agenda não encontrada." };
   const rules = [];
@@ -90,7 +90,7 @@ export async function saveHoursAction(_: SettingsFormState, formData: FormData):
     const lunchStart = String(formData.get(`lunch-start-${day}`) ?? ""); const lunchEnd = String(formData.get(`lunch-end-${day}`) ?? "");
     if (enabled && (!validTime(start) || !validTime(end) || minutes(start) >= minutes(end))) return { error: "Revise o horário de início e término dos dias selecionados." };
     if ((lunchStart || lunchEnd) && (!validTime(lunchStart) || !validTime(lunchEnd) || minutes(lunchStart) >= minutes(lunchEnd))) return { error: "Revise o intervalo de almoço." };
-    rules.push(prisma.availabilityRule.upsert({ where: { resourceId_dayOfWeek: { resourceId, dayOfWeek: day } }, create: { resourceId, dayOfWeek: day, startsAtMinute: enabled ? minutes(start) : 0, endsAtMinute: enabled ? minutes(end) : 0, lunchStartsAt: lunchStart ? minutes(lunchStart) : null, lunchEndsAt: lunchEnd ? minutes(lunchEnd) : null, isEnabled: enabled }, update: { startsAtMinute: enabled ? minutes(start) : 0, endsAtMinute: enabled ? minutes(end) : 0, lunchStartsAt: lunchStart ? minutes(lunchStart) : null, lunchEndsAt: lunchEnd ? minutes(lunchEnd) : null, isEnabled: enabled } }));
+    rules.push(prisma.availabilityRule.upsert({ where: { organizationId_resourceId_dayOfWeek: { organizationId, resourceId, dayOfWeek: day } }, create: { resourceId, dayOfWeek: day, startsAtMinute: enabled ? minutes(start) : 0, endsAtMinute: enabled ? minutes(end) : 0, lunchStartsAt: lunchStart ? minutes(lunchStart) : null, lunchEndsAt: lunchEnd ? minutes(lunchEnd) : null, isEnabled: enabled }, update: { startsAtMinute: enabled ? minutes(start) : 0, endsAtMinute: enabled ? minutes(end) : 0, lunchStartsAt: lunchStart ? minutes(lunchStart) : null, lunchEndsAt: lunchEnd ? minutes(lunchEnd) : null, isEnabled: enabled } }));
   }
   try {
     await prisma.$transaction([...rules, prisma.auditLog.create({ data: { userId: owner.id, action: "AVAILABILITY_UPDATED", entityType: "CalendarResource", entityId: resourceId } })]);

@@ -2,15 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { headers } from "next/headers";
 import { assertSameOrigin, requirePermission } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
 import { cancelAppointment, rescheduleAppointment } from "@/lib/agenda/update-appointment";
 import { SchedulingError } from "@/lib/agenda/create-appointment";
 import { formatDate, formatTime } from "@/lib/date-time";
 import { createAppointmentActionLinks } from "@/lib/client-booking/action-tokens";
-import { CURRENT_STUDIO_ID, STUDIO_BRAND } from "@/lib/studio-config";
+import { STUDIO_BRAND } from "@/lib/studio-config";
+import { requireTenantContext } from "@/lib/tenancy/context";
 import { fieldErrorsFromZod, type FieldErrors } from "@/lib/forms/validation";
+import { completeAppointmentWithFinance, FinanceError } from "@/lib/admin/finance";
 
 export type AppointmentActionState = { error?: string; success?: string; fieldErrors?: FieldErrors; warning?: string };
 
@@ -26,9 +27,17 @@ export async function updateAppointmentStatusAction(_: AppointmentActionState, f
   if (!appointment) return { error: "Agendamento não encontrado." };
   if (appointment.status === "CANCELED") return { error: "Um atendimento cancelado não pode ter o status alterado." };
   if (appointment.status === parsed.data.status) return { success: "O status já estava atualizado." };
+  if (parsed.data.status === "COMPLETED") {
+    try {
+      await completeAppointmentWithFinance({ appointmentId: appointment.id, actorUserId: staff.id });
+      refreshAppointment(appointment.id);
+      return { success: "Atendimento concluído. Pacote e comissão aplicáveis foram atualizados." };
+    } catch (error) {
+      return { error: error instanceof FinanceError ? error.message : "Não foi possível concluir o atendimento agora." };
+    }
+  }
   await prisma.$transaction([
-    prisma.appointment.update({ where: { id: appointment.id }, data: { status: parsed.data.status, completedAt: parsed.data.status === "COMPLETED" ? new Date() : null, confirmedAt: parsed.data.status === "CONFIRMED" ? appointment.confirmedAt ?? new Date() : appointment.confirmedAt } }),
-    ...(parsed.data.status === "COMPLETED" ? [prisma.client.update({ where: { id: appointment.clientId }, data: { lastAppointmentAt: new Date(), returnRecommendedAt: appointment.service.recommendedReturnDays ? new Date(Date.now() + appointment.service.recommendedReturnDays * 24 * 60 * 60 * 1000) : null, status: "ACTIVE" } })] : []),
+    prisma.appointment.update({ where: { id: appointment.id }, data: { status: parsed.data.status, completedAt: null, confirmedAt: parsed.data.status === "CONFIRMED" ? appointment.confirmedAt ?? new Date() : appointment.confirmedAt } }),
     prisma.appointmentEvent.create({ data: { appointmentId: appointment.id, actorUserId: staff.id, type: "STATUS_CHANGED", previousValue: { status: appointment.status }, nextValue: { status: parsed.data.status } } }),
     prisma.auditLog.create({ data: { userId: staff.id, action: "APPOINTMENT_STATUS_CHANGED", entityType: "Appointment", entityId: appointment.id, before: { status: appointment.status }, after: { status: parsed.data.status } } }),
   ]);
@@ -111,14 +120,11 @@ export async function prepareWhatsappAction(_: AppointmentActionState, formData:
   const [appointment, template, settings] = await Promise.all([
     prisma.appointment.findUnique({ where: { id: appointmentId.data }, include: { client: true, service: true } }),
     prisma.messageTemplate.findFirst({ where: { channel: "WHATSAPP", isActive: true, name: { contains: "confirma", mode: "insensitive" } }, orderBy: { updatedAt: "desc" } }),
-    prisma.studioSettings.findUnique({ where: { id: CURRENT_STUDIO_ID } }),
+    prisma.studioSettings.findUnique({ where: { organizationId: requireTenantContext().organizationId } }),
   ]);
   if (!appointment?.client.whatsapp) return { error: "Cadastre o WhatsApp da cliente antes de preparar a mensagem." };
   const fallback = "Olá, {nome}. Seu horário para {servico} está marcado para {data}, às {horario}.";
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const links = await createAppointmentActionLinks(appointment.id, `${protocol}://${host}`);
+  const links = await createAppointmentActionLinks(appointment.id, process.env.APP_URL ?? "http://localhost:3000");
   const sourceBody = template?.body ?? fallback;
   const containsActionVariables = ["{link_confirmar}", "{link_cancelar}", "{link_reagendar}"].some((variable) => sourceBody.includes(variable));
   const baseBody = sourceBody
