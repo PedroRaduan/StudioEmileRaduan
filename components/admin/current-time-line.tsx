@@ -27,11 +27,14 @@ export function CurrentTimeLine({ date, gridStartMinute, gridEndMinute, pixelsPe
   useEffect(() => {
     if (!now || positioned.current || !lineRef.current) return;
     positioned.current = true;
-    const rect = lineRef.current.getBoundingClientRect();
-    const outsideComfortableView = rect.top < 120 || rect.top > window.innerHeight - 100;
-    if (outsideComfortableView && window.scrollY < 160) {
+    const scrollRegion = lineRef.current.closest<HTMLElement>("[data-timeline-board]");
+    if (!scrollRegion || scrollRegion.scrollTop >= 8) return;
+    const lineTop = lineRef.current.getBoundingClientRect().top - scrollRegion.getBoundingClientRect().top + scrollRegion.scrollTop;
+    const comfortableTop = scrollRegion.scrollTop + 72;
+    const comfortableBottom = scrollRegion.scrollTop + scrollRegion.clientHeight - 96;
+    if (lineTop < comfortableTop || lineTop > comfortableBottom) {
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      lineRef.current.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+      scrollRegion.scrollTo({ behavior: reducedMotion ? "auto" : "smooth", top: Math.max(0, lineTop - scrollRegion.clientHeight / 2) });
     }
   }, [now]);
 

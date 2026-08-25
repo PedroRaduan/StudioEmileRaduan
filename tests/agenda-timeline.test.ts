@@ -7,6 +7,7 @@ import {
   timelinePixelsPerMinute,
   timelinePlacement,
   timelineSlots,
+  timelineTickKind,
 } from "../lib/agenda/timeline";
 
 describe("timeline diária da agenda", () => {
@@ -45,5 +46,11 @@ describe("timeline diária da agenda", () => {
   it("usa 10 minutos como padrão para valores ausentes ou inválidos", () => {
     expect(calendarSlotInterval(undefined)).toBe(10);
     expect(calendarSlotInterval(12)).toBe(10);
+  });
+
+  it("destaca apenas horas e meias-horas, sem perder a precisão dos slots", () => {
+    expect(timelineTickKind(9 * 60)).toBe("hour");
+    expect(timelineTickKind(9 * 60 + 30)).toBe("half-hour");
+    expect(timelineTickKind(9 * 60 + 10)).toBe("slot");
   });
 });

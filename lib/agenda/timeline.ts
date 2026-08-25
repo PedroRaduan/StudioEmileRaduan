@@ -30,6 +30,13 @@ export function timelineSlots(startsAtMinute: number, endsAtMinute: number, inte
   return slots;
 }
 
+/** Mantém a grade precisa, mas só destaca marcações úteis para leitura rápida. */
+export function timelineTickKind(minute: number) {
+  if (minute % 60 === 0) return "hour";
+  if (minute % 30 === 0) return "half-hour";
+  return "slot";
+}
+
 /** Retorna o início visual da agenda sem manter horas vazias antes do próximo item. */
 export function nextTimelineStart(defaultStart: number, spans: TimelineSpan[]) {
   const validSpans = spans.filter((span) => span.endsAtMinute > span.startsAtMinute);

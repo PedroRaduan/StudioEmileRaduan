@@ -11,6 +11,7 @@ import {
   timelinePixelsPerMinute,
   timelinePlacement,
   timelineSlots,
+  timelineTickKind,
 } from "@/lib/agenda/timeline";
 import { CurrentTimeLine } from "./current-time-line";
 
@@ -60,8 +61,10 @@ export function DailyAgendaTimeline({ data, date }: { data: DailyAgendaData; dat
     <section aria-label={`Agenda de ${formatDate(new Date(`${date}T12:00:00Z`), { day: "numeric", month: "long", timeZone: "UTC" })}`} className="day-agenda">
       <header className="day-agenda-summary"><div><Clock3 aria-hidden="true" size={18} /><span><strong>{liveCount}</strong> {liveCount === 1 ? "atendimento" : "atendimentos"}</span></div><span>Grade de {interval} minutos</span></header>
       {!views.length ? <div className="timeline-notice" role="note"><span>A agenda ainda não tem profissionais ou recursos ativos.</span><Link href="/admin/configuracoes/horarios">Configurar agenda</Link></div> : null}
-      <div className={`timeline-resources timeline-resources-${Math.min(views.length, 4)}`}>
-        {views.map((view) => <ResourceTimeline bounds={bounds} date={date} height={height} interval={interval} key={view.resource.id} pixelsPerMinute={pixelsPerMinute} slots={slots} timezone={timezone} view={view} />)}
+      <div className="timeline-board" data-timeline-board>
+        <div className={`timeline-resources timeline-resources-${Math.min(views.length, 4)}`}>
+          {views.map((view) => <ResourceTimeline bounds={bounds} date={date} height={height} interval={interval} key={view.resource.id} pixelsPerMinute={pixelsPerMinute} slots={slots} timezone={timezone} view={view} />)}
+        </div>
       </div>
       {!liveCount && views.length ? <div className="timeline-empty-hint"><CalendarPlus aria-hidden="true" size={17} /><span>Dia livre. Toque em qualquer horário para agendar.</span></div> : null}
     </section>
@@ -81,15 +84,20 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
   const liveAppointments = view.appointments.filter((appointment) => appointment.status !== "CANCELED" && spanForDate(appointment.startsAt, appointment.endsAt, date, timezone).endsAtMinute > bounds.startsAtMinute);
   const canceledAppointments = view.appointments.filter((appointment) => appointment.status === "CANCELED");
   const visibleBlocks = view.blocks.filter((block) => spanForDate(block.startsAt, block.endsAt, date, timezone).endsAtMinute > bounds.startsAtMinute);
+  const resourceSummary = view.workingWindow.notice ?? "Disponível neste período";
   return <article className="timeline-resource">
-    <header><strong>{view.resource.name}</strong><span>{liveAppointments.length} {liveAppointments.length === 1 ? "atendimento" : "atendimentos"}</span></header>
-    {view.workingWindow.notice ? <div className="timeline-notice" role="note"><span>{view.workingWindow.notice}</span></div> : null}
-    <div className="timeline-scroll-region"><div className="timeline-canvas" style={{ height }}>
+    <header>
+      <div className="timeline-resource-title"><strong>{view.resource.name}</strong><span title={view.workingWindow.notice ?? undefined}>{resourceSummary}</span></div>
+      <span className="timeline-resource-count">{liveAppointments.length} {liveAppointments.length === 1 ? "atendimento" : "atendimentos"}</span>
+    </header>
+    <div className="timeline-canvas" style={{ height }}>
       {slots.map((minute) => {
         const placement = timelinePlacement(minute, minute + interval, bounds.startsAtMinute, pixelsPerMinute);
         const time = timeFromMinute(minute);
+        const tickKind = timelineTickKind(minute);
         const occupied = [...view.appointmentSpans, ...view.blockSpans].some((span) => span.startsAtMinute < minute + interval && span.endsAtMinute > minute);
-        return occupied ? <div aria-hidden="true" className="timeline-slot is-occupied" key={minute} style={{ height: placement.height, top: placement.top }}><time>{time}</time><span /></div> : <Link aria-label={`Criar agendamento na agenda ${view.resource.name} às ${time}`} className="timeline-slot" href={`/admin/agendamentos/novo?date=${date}&time=${time}&resourceId=${view.resource.id}`} key={minute} style={{ height: placement.height, top: placement.top }}><time dateTime={time}>{time}</time><span aria-hidden="true" /></Link>;
+        const className = `timeline-slot tick-${tickKind}${occupied ? " is-occupied" : ""}`;
+        return occupied ? <div aria-hidden="true" className={className} key={minute} style={{ height: placement.height, top: placement.top }}><time>{tickKind === "hour" ? time : ""}</time><span /></div> : <Link aria-label={`Criar agendamento na agenda ${view.resource.name} às ${time}`} className={className} href={`/admin/agendamentos/novo?date=${date}&time=${time}&resourceId=${view.resource.id}`} key={minute} style={{ height: placement.height, top: placement.top }}><time dateTime={time}>{tickKind === "hour" ? time : <span className="sr-only">{time}</span>}</time><span aria-hidden="true" /></Link>;
       })}
       {visibleBlocks.map((block) => {
         const span = spanForDate(block.startsAt, block.endsAt, date, timezone);
@@ -103,7 +111,7 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
         return <Link aria-label={`${appointment.client.preferredName ?? appointment.client.fullName}, ${formatTime(appointment.startsAt)} às ${formatTime(appointment.endsAt)}, ${statusLabel(appointment.status)}`} className={`timeline-appointment status-${appointment.status.toLowerCase()}${compact ? " is-compact" : ""}`} href={`/admin/agendamentos/${appointment.id}`} key={appointment.id} style={{ borderLeftColor: appointment.service.calendarColor, height: placement.height, top: placement.top }}><div className="timeline-appointment-main"><time>{formatTime(appointment.startsAt)}–{formatTime(appointment.endsAt)}</time><strong>{appointment.client.preferredName ?? appointment.client.fullName}</strong><span>{appointment.service.name} · {appointment.durationMinutes} min</span></div><span className="timeline-status">{statusIcon(appointment.status)}{statusLabel(appointment.status)}</span></Link>;
       })}
       <CurrentTimeLine date={date} gridEndMinute={bounds.endsAtMinute} gridStartMinute={bounds.startsAtMinute} pixelsPerMinute={pixelsPerMinute} timezone={timezone} />
-    </div></div>
+    </div>
     {canceledAppointments.length ? <div className="canceled-appointments"><strong>Cancelados</strong>{canceledAppointments.map((appointment) => <Link href={`/admin/agendamentos/${appointment.id}`} key={appointment.id}><X aria-hidden="true" size={14} />{formatTime(appointment.startsAt)} · {appointment.client.preferredName ?? appointment.client.fullName}</Link>)}</div> : null}
   </article>;
 }

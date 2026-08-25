@@ -33,14 +33,16 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       </div>
       {params.saved ? <p className="form-success agenda-success" role="status">Agendamento salvo. O horário já está protegido contra conflitos.</p> : null}
       {params.availabilityWarning ? <p className="form-warning" role="status">Horário salvo, mas este dia ainda não possui expediente configurado. Revise os horários de trabalho quando puder.</p> : null}
-      <nav className="agenda-view-tabs" aria-label="Visualização da agenda">
-        {views.map((item) => <Link className={view === item.value ? "active" : ""} href={`/admin/agenda?date=${date}&view=${item.value}`} key={item.value}>{item.label}</Link>)}
-      </nav>
-      <div className="agenda-toolbar">
-        <Link aria-label="Período anterior" href={`/admin/agenda?date=${previous}&view=${view}`}><ChevronLeft aria-hidden="true" size={19} /></Link>
-        <AgendaDatePicker date={date} view={view} />
-        <Link aria-label="Próximo período" href={`/admin/agenda?date=${next}&view=${view}`}><ChevronRight aria-hidden="true" size={19} /></Link>
-        <Link className="today-link" href={`/admin/agenda?date=${todayInTimezone(timezone)}&view=${view}`}>Hoje</Link>
+      <div className="agenda-controls">
+        <nav className="agenda-view-tabs" aria-label="Visualização da agenda">
+          {views.map((item) => <Link className={view === item.value ? "active" : ""} href={`/admin/agenda?date=${date}&view=${item.value}`} key={item.value}>{item.label}</Link>)}
+        </nav>
+        <div className="agenda-toolbar">
+          <Link aria-label="Período anterior" href={`/admin/agenda?date=${previous}&view=${view}`}><ChevronLeft aria-hidden="true" size={19} /></Link>
+          <AgendaDatePicker date={date} view={view} />
+          <Link aria-label="Próximo período" href={`/admin/agenda?date=${next}&view=${view}`}><ChevronRight aria-hidden="true" size={19} /></Link>
+          <Link className="today-link" href={`/admin/agenda?date=${todayInTimezone(timezone)}&view=${view}`}>Hoje</Link>
+        </div>
       </div>
       {dailyAgenda ? <DailyAgendaTimeline data={dailyAgenda} date={date} /> : groups.length ? (
         <div className="agenda-groups">
