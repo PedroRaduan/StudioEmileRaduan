@@ -23,7 +23,7 @@ const serviceSchema = z.object({
   price: money(), promotionalPrice: money(), displayOrder: intFromForm(0, 9999), color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Escolha uma cor válida."),
   minAdvanceHours: intFromForm(0, 720), maxAdvanceDays: intFromForm(1, 365),
   depositType: z.enum(["FIXED", "PERCENT"]).optional(), depositValue: z.string().trim().optional(),
-  cancellationPolicy: optionalText(4000), beforeCare: optionalText(4000), afterCare: optionalText(4000),
+  beforeCare: optionalText(4000), afterCare: optionalText(4000),
 });
 
 function serviceData(formData: FormData) {
@@ -45,7 +45,7 @@ function serviceData(formData: FormData) {
     calendarColor: parsed.data.color, isOnlineAvailable: formData.get("showPublicly") === "on", isActive: formData.get("isActive") === "on",
     minAdvanceHours: parsed.data.minAdvanceHours, maxAdvanceDays: parsed.data.maxAdvanceDays,
     depositRequired, depositType: depositRequired ? parsed.data.depositType ?? "FIXED" : null, depositValue,
-    cancellationPolicy: parsed.data.cancellationPolicy, beforeCare: parsed.data.beforeCare, afterCare: parsed.data.afterCare,
+    beforeCare: parsed.data.beforeCare, afterCare: parsed.data.afterCare,
   } } as const;
 }
 

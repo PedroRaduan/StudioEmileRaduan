@@ -4,6 +4,8 @@ import { AdminShell } from "@/components/admin/shell";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { PwaInstallProvider } from "@/components/pwa-install";
 import { PwaRegister } from "@/components/pwa-register";
+import { FirstVisitTour } from "@/components/admin/first-visit-tour";
+import { hasSeenAdminTour } from "@/lib/admin/tour";
 
 export const dynamic = "force-dynamic";
 // Deployments de preview usam Vercel Authentication. Como a Vercel intercepta
@@ -25,5 +27,6 @@ export const metadata: Metadata = {
 
 export default async function PrivateAdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const staff = await requireStaff();
-  return <PwaInstallProvider><AdminShell staffName={staff.name} staffRole={staff.role}>{children}{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell></PwaInstallProvider>;
+  const tourSeen = await hasSeenAdminTour();
+  return <PwaInstallProvider><AdminShell staffName={staff.name} staffRole={staff.role}>{children}<FirstVisitTour initiallySeen={tourSeen} />{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell></PwaInstallProvider>;
 }

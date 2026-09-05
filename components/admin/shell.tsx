@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, CalendarDays, CalendarPlus, ChartNoAxesCombined, ClipboardList, ListOrdered, LogOut, Menu, Settings, Sparkles, Users, WalletCards, X } from "lucide-react";
+import { BarChart3, CalendarDays, CalendarPlus, ChartNoAxesCombined, ClipboardList, LogOut, Menu, Settings, Users, WalletCards, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { logoutAction } from "@/app/admin/(private)/actions";
 import { can, type Permission, type StaffRole } from "@/lib/auth/permissions";
@@ -21,8 +21,6 @@ const links: NavigationItem[] = [
   { href: "/admin/agenda", label: "Agenda", icon: CalendarDays },
   { href: "/admin/agendamentos/novo", label: "Novo agendamento", icon: CalendarPlus, exact: true },
   { href: "/admin/clientes", label: "Clientes", icon: Users },
-  { href: "/admin/oportunidades", label: "Oportunidades", icon: Sparkles, permission: "CLIENTS_MANAGE" },
-  { href: "/admin/lista-espera", label: "Lista de espera", icon: ListOrdered, permission: "WAITLIST_MANAGE" },
   { href: "/admin/servicos", label: "Serviços", icon: ClipboardList, permission: "SERVICES_MANAGE" },
   { href: "/admin/financeiro", label: "Financeiro", icon: WalletCards, permission: "FINANCE_VIEW" },
   { href: "/admin/relatorios", label: "Relatórios", icon: BarChart3, permission: "REPORTS_VIEW" },
@@ -36,7 +34,7 @@ export function AdminShell({ children, staffName, staffRole }: { children: React
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   const visibleLinks = links.filter((link) => !link.permission || can(staffRole, link.permission));
-  const moreActive = ["/admin/oportunidades", "/admin/lista-espera", "/admin/servicos", "/admin/financeiro", "/admin/relatorios", "/admin/configuracoes"].some((href) => pathname.startsWith(href));
+  const moreActive = ["/admin/servicos", "/admin/financeiro", "/admin/relatorios", "/admin/configuracoes"].some((href) => pathname.startsWith(href));
   const agendaActive = isNavigationActive(pathname, "/admin/agenda");
 
   useEffect(() => {

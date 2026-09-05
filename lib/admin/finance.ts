@@ -4,27 +4,27 @@ import { Prisma } from "@/app/generated/prisma/client";
 import { getPrisma } from "@/lib/db/prisma";
 import { requireTenantContext } from "@/lib/tenancy/context";
 import { calculateDailyExpected } from "@/lib/admin/finance-calculations";
+import { localDayRange, todayInTimezone } from "@/lib/date-time";
 
 export class FinanceError extends Error {}
 
 export async function getFinancialOverview() {
   const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
-  const dayStart = new Date();
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(dayStart);
-  dayEnd.setDate(dayEnd.getDate() + 1);
-  const [expenses, payments, packages, commissions, closes] = await Promise.all([
+  const settings = await prisma.studioSettings.findUnique({ where: { organizationId }, select: { timezone: true } });
+  const timezone = settings?.timezone ?? "America/Sao_Paulo";
+  const today = todayInTimezone(timezone);
+  const { start: dayStart, end: dayEnd } = localDayRange(today, timezone);
+  const [expenses, payments, expenseTotal, commissionTotal] = await Promise.all([
     prisma.expense.findMany({ where: { deletedAt: null }, orderBy: { occurredAt: "desc" }, take: 20 }),
     prisma.payment.findMany({ where: { confirmedAt: { gte: dayStart, lt: dayEnd }, status: { in: ["PAID", "PARTIALLY_PAID"] } }, select: { amountPaidCents: true } }),
-    prisma.servicePackage.findMany({ where: { status: "ACTIVE" }, orderBy: { purchasedAt: "desc" }, take: 20 }),
-    prisma.commissionEntry.findMany({ where: { status: { in: ["PENDING", "APPROVED"] } }, orderBy: { generatedAt: "desc" }, take: 20 }),
-    prisma.dailyCashClose.findMany({ orderBy: { date: "desc" }, take: 7 }),
+    prisma.expense.aggregate({ where: { deletedAt: null, status: "PAID", occurredAt: { gte: dayStart, lt: dayEnd } }, _sum: { amountCents: true } }),
+    prisma.commissionEntry.aggregate({ where: { status: { in: ["PENDING", "APPROVED"] } }, _sum: { amountCents: true } }),
   ]);
-  const todayExpenses = expenses.filter((expense) => expense.status === "PAID" && expense.occurredAt >= dayStart && expense.occurredAt < dayEnd).reduce((total, expense) => total + expense.amountCents, 0);
+  const todayExpenses = expenseTotal._sum.amountCents ?? 0;
   const todayRevenue = payments.reduce((total, payment) => total + payment.amountPaidCents, 0);
-  const pendingCommissionCents = commissions.reduce((total, entry) => total + entry.amountCents, 0);
-  return { organizationId, expenses, packages, commissions, closes, todayRevenue, todayExpenses, pendingCommissionCents };
+  const pendingCommissionCents = commissionTotal._sum.amountCents ?? 0;
+  return { organizationId, expenses, today, timezone, todayRevenue, todayExpenses, pendingCommissionCents };
 }
 
 export async function createExpense(input: { category: string; description: string; amountCents: number; occurredAt: Date; paymentMethod?: "CASH" | "PIX" | "CARD" | "TRANSFER"; note?: string | null; actorUserId: string }) {

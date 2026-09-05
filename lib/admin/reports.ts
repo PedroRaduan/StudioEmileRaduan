@@ -8,10 +8,9 @@ export async function getReports(from: string, to: string) {
   const prisma = getPrisma();
   const startsAt = localDayRange(from).start;
   const endsAt = localDayRange(to).end;
-  const [appointments, newClients, recentAudit] = await Promise.all([
+  const [appointments, newClients] = await Promise.all([
     prisma.appointment.findMany({ where: { startsAt: { gte: startsAt, lt: endsAt } }, select: { status: true, priceCents: true, payment: { select: { amountDueCents: true, amountPaidCents: true, status: true } }, service: { select: { name: true } } } }),
     prisma.client.count({ where: { deletedAt: null, createdAt: { gte: startsAt, lt: endsAt } } }),
-    prisma.auditLog.findMany({ where: { createdAt: { gte: startsAt, lt: endsAt } }, include: { user: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 20 }),
   ]);
   const count = (status: string) => appointments.filter((item) => item.status === status).length;
   const completed = count("COMPLETED");
@@ -35,6 +34,5 @@ export async function getReports(from: string, to: string) {
     expectedCents,
     pendingCents,
     services: [...services.entries()].sort((left, right) => right[1] - left[1]).slice(0, 8),
-    recentAudit,
   };
 }

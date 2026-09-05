@@ -21,7 +21,6 @@ export function AppointmentForm({ date, minDate, time, selectedClientId, selecte
       <FieldError error={state.fieldErrors?.time}><label htmlFor="time">Horário</label><input aria-invalid={Boolean(state.fieldErrors?.time)} defaultValue={time} id="time" name="time" required step="300" type="time" /></FieldError>
       <FieldError error={state.fieldErrors?.resourceId}><label htmlFor="resourceId">Agenda</label><select aria-invalid={Boolean(state.fieldErrors?.resourceId)} defaultValue={resources.some((resource) => resource.id === selectedResourceId) ? selectedResourceId : resources[0]?.id ?? ""} id="resourceId" name="resourceId" required>{resources.map((resource) => <option key={resource.id} value={resource.id}>{resource.name}</option>)}</select></FieldError>
     </div>
-    <div className="field-group"><label htmlFor="notes">Observações internas <span>opcional</span></label><textarea id="notes" maxLength={2000} name="notes" placeholder="Estas observações não aparecem para a cliente." /></div>
     {state.error ? <p className="form-error" role="alert">{state.error}</p> : null}
     <button className="button button-primary appointment-submit" disabled={isPending} type="submit"><Save aria-hidden="true" size={18} />{isPending ? "Salvando…" : "Confirmar agendamento"}</button>
   </form>;
