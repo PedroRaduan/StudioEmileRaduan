@@ -11,7 +11,7 @@ export default async function CalendarSettingsPage() {
     <main className="admin-page editor-page">
       <Link className="back-link" href="/admin/configuracoes"><ArrowLeft aria-hidden="true" size={17} /> Voltar para configurações</Link>
       <div className="editor-heading"><p className="eyebrow">Configurações · Agenda</p><h1>A agenda na medida certa.</h1><p>Escolha a distância entre as linhas da visualização diária sem alterar a duração dos seus serviços.</p></div>
-      <section className="editor-card"><CalendarSettingsForm interval={calendarSlotInterval(settings?.calendarSlotInterval)} /></section>
+      <section className="editor-card"><CalendarSettingsForm interval={calendarSlotInterval(settings?.calendarSlotInterval)} primaryColor={settings?.primaryColor} /></section>
     </main>
   );
 }

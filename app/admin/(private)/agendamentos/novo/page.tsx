@@ -6,7 +6,7 @@ import { AppointmentForm } from "./appointment-form";
 
 export default async function NewAppointmentPage({ searchParams }: { searchParams: Promise<{ date?: string; time?: string; clientId?: string; resourceId?: string }> }) {
   const params = await searchParams;
-  const data = await getAppointmentFormData();
+  const data = await getAppointmentFormData(params.clientId);
   const today = todayInTimezone(data.timezone);
   const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : today;
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(params.time ?? "") ? params.time! : "";

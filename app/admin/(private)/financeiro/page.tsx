@@ -5,6 +5,7 @@ import { getFinancialOverview } from "@/lib/admin/finance";
 import { getPrisma } from "@/lib/db/prisma";
 import { formatDate } from "@/lib/date-time";
 import { FinanceActions } from "./finance-actions";
+import Link from "next/link";
 const money = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value / 100);
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function FinancePage() {
       <article><span><ArrowUpRight size={18} /> Despesas hoje</span><strong>{money(overview.todayExpenses)}</strong><small>Saídas registradas</small></article>
     </section>
     <FinanceActions clients={clients} services={services} today={overview.today} mayManage={mayManage} mayClose={mayClose} />
+    <Link className="secondary-action" href="/admin/estoque">Estoque · compras e materiais</Link>
     <section className="admin-card finance-transactions">
       <div className="card-heading"><div><p className="eyebrow">Movimentação</p><h2>Últimas despesas</h2></div><ReceiptText size={21} aria-hidden="true" /></div>
       {overview.expenses.length ? <ul className="finance-transactions-list">{overview.expenses.map((expense) => <li key={expense.id}><span className="expense-icon"><ArrowUpRight size={18} /></span><div><strong>{expense.description}</strong><small>{expense.category} · {formatDate(expense.occurredAt, { day: "2-digit", month: "short", timeZone: overview.timezone })}</small></div><b>− {money(expense.amountCents)}</b></li>)}</ul> : <div className="empty-state"><ReceiptText size={28} aria-hidden="true" /><p>Tudo em ordem por aqui.</p><span>Use “Nova despesa” para registrar sua primeira saída.</span></div>}

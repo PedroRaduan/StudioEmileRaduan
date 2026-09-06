@@ -4,6 +4,7 @@ import { AgendaDatePicker } from "@/components/admin/agenda-date-picker";
 import { DailyAgendaTimeline } from "@/components/admin/daily-agenda-timeline";
 import { getAgendaForDay, getAgendaForRange, getAgendaTimezone } from "@/lib/admin/agenda";
 import { dateKeyInTimezone, formatDate, formatTime, todayInTimezone } from "@/lib/date-time";
+import { isAgendaDate, shiftAgendaDate } from "@/lib/agenda/navigation";
 
 type View = "day" | "week" | "month" | "list";
 const views: Array<{ value: View; label: string }> = [
@@ -16,14 +17,14 @@ const views: Array<{ value: View; label: string }> = [
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ date?: string; view?: string; saved?: string; availabilityWarning?: string }> }) {
   const params = await searchParams;
   const timezone = await getAgendaTimezone();
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(params.date ?? "") ? params.date! : todayInTimezone(timezone);
+  const date = isAgendaDate(params.date) ? params.date : todayInTimezone(timezone);
   const view = views.some((item) => item.value === params.view) ? params.view as View : "day";
   const range = dateRange(date, view);
   const dailyAgenda = view === "day" ? await getAgendaForDay(date) : null;
   const rangedAgenda = view === "day" ? null : await getAgendaForRange(range.start, range.end);
-  const groups = rangedAgenda ? groupAgenda(rangedAgenda.appointments, rangedAgenda.blocks) : [];
-  const previous = shiftDate(date, view, -1);
-  const next = shiftDate(date, view, 1);
+  const groups = rangedAgenda ? groupAgenda(rangedAgenda.appointments, rangedAgenda.blocks, timezone) : [];
+  const previous = shiftAgendaDate(date, view, -1);
+  const next = shiftAgendaDate(date, view, 1);
 
   return (
     <main className="admin-page agenda-page">
@@ -58,14 +59,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                   {group.items.map((item) => item.kind === "block" ? (
                     <li className="agenda-block" key={item.id}>
                       <LockKeyhole aria-hidden="true" size={16} />
-                      <time>{formatTime(item.startsAt)} – {formatTime(item.endsAt)}</time>
+                      <time>{formatTime(item.startsAt, timezone)} – {formatTime(item.endsAt, timezone)}</time>
                       <strong>{item.title}</strong>
                       {item.note ? <span>{item.note}</span> : null}
                     </li>
                   ) : (
                     <li className={`agenda-item status-${item.status.toLowerCase()}`} key={item.id}>
                       <Link href={`/admin/agendamentos/${item.id}`}>
-                        <time>{formatTime(item.startsAt)}</time>
+                        <time>{formatTime(item.startsAt, timezone)}</time>
                         <div className="agenda-client"><strong>{item.client.preferredName ?? item.client.fullName}</strong><span>{item.service.name} · {item.durationMinutes} min</span></div>
                         <span className="agenda-status">{statusLabel(item.status)}</span>
                         <i aria-hidden="true" style={{ backgroundColor: item.service.calendarColor }} />
@@ -102,13 +103,6 @@ function dateRange(date: string, view: View) {
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 
-function shiftDate(date: string, view: View, direction: number) {
-  const value = new Date(`${date}T12:00:00Z`);
-  if (view === "month") value.setUTCMonth(value.getUTCMonth() + direction);
-  else value.setUTCDate(value.getUTCDate() + direction * (view === "day" ? 1 : view === "list" ? 30 : 7));
-  return value.toISOString().slice(0, 10);
-}
-
 function periodTitle(date: string, view: View) {
   const value = new Date(`${date}T12:00:00Z`);
   if (view === "month") return formatDate(value, { month: "long", year: "numeric", timeZone: "UTC" });
@@ -121,14 +115,14 @@ function statusLabel(status: string) {
   return ({ SCHEDULED: "Agendado", AWAITING_CONFIRMATION: "Aguardando confirmação", CONFIRMED: "Confirmado", ARRIVED: "Chegou", IN_SERVICE: "Em atendimento", COMPLETED: "Concluído", CANCELED: "Cancelado", NO_SHOW: "Falta" } as Record<string, string>)[status] ?? status;
 }
 
-function groupAgenda(appointments: Awaited<ReturnType<typeof getAgendaForRange>>["appointments"], blocks: Awaited<ReturnType<typeof getAgendaForRange>>["blocks"]) {
+function groupAgenda(appointments: Awaited<ReturnType<typeof getAgendaForRange>>["appointments"], blocks: Awaited<ReturnType<typeof getAgendaForRange>>["blocks"], timezone?: string) {
   const map = new Map<string, Array<({ kind: "appointment" } & (typeof appointments)[number]) | ({ kind: "block" } & (typeof blocks)[number])>>();
   appointments.forEach((item) => {
-    const key = dateKeyInTimezone(item.startsAt);
+    const key = dateKeyInTimezone(item.startsAt, timezone);
     map.set(key, [...(map.get(key) ?? []), { ...item, kind: "appointment" }]);
   });
   blocks.forEach((item) => {
-    const key = dateKeyInTimezone(item.startsAt);
+    const key = dateKeyInTimezone(item.startsAt, timezone);
     map.set(key, [...(map.get(key) ?? []), { ...item, kind: "block" }]);
   });
   return [...map.entries()]

@@ -6,6 +6,8 @@ import { PwaInstallProvider } from "@/components/pwa-install";
 import { PwaRegister } from "@/components/pwa-register";
 import { FirstVisitTour } from "@/components/admin/first-visit-tour";
 import { hasSeenAdminTour } from "@/lib/admin/tour";
+import { getPrisma } from "@/lib/db/prisma";
+import { requireTenantContext } from "@/lib/tenancy/context";
 
 export const dynamic = "force-dynamic";
 // Deployments de preview usam Vercel Authentication. Como a Vercel intercepta
@@ -28,5 +30,7 @@ export const metadata: Metadata = {
 export default async function PrivateAdminLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const staff = await requireStaff();
   const tourSeen = await hasSeenAdminTour();
-  return <PwaInstallProvider><AdminShell staffName={staff.name} staffRole={staff.role}>{children}<FirstVisitTour initiallySeen={tourSeen} />{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell></PwaInstallProvider>;
+  const { organizationId } = await requireTenantContext();
+  const settings = await getPrisma().studioSettings.findUnique({ where: { organizationId }, select: { primaryColor: true, studioName: true, calendarSlotInterval: true } });
+  return <PwaInstallProvider><AdminShell studioName={settings?.studioName} primaryColor={settings?.primaryColor} staffName={staff.name} staffRole={staff.role}>{children}<FirstVisitTour initiallySeen={tourSeen} studioName={settings?.studioName} primaryColor={settings?.primaryColor} interval={settings?.calendarSlotInterval} mayCustomize={staff.role === "OWNER"} />{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell></PwaInstallProvider>;
 }

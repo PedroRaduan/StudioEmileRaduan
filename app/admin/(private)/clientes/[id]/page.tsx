@@ -1,22 +1,18 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, FileCheck2, MessageCircle, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CalendarDays, MessageCircle, ShieldCheck } from "lucide-react";
 import { getClientProfile } from "@/lib/admin/clients";
 import { requireStaff } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { formatDate, formatTime } from "@/lib/date-time";
-import { getPrisma } from "@/lib/db/prisma";
 import { decryptSensitiveData, emptySensitiveClientData } from "@/lib/security/sensitive-data";
 import { whatsappLink } from "@/lib/studio";
-import { ClientAccessForm, ClientDetailsForm, ConsentForm, HealthProfileForm, PrivacyRequestForm } from "./client-profile-forms";
+import { ClientAccessForm, ClientDetailsForm, HealthProfileForm, PrivacyRequestForm } from "./client-profile-forms";
 
 export default async function ClientProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const staff = await requireStaff();
   const { id } = await params;
-  const [client, documents] = await Promise.all([
-    getClientProfile(id),
-    getPrisma().document.findMany({ where: { isActive: true }, select: { id: true, title: true, version: true }, orderBy: { createdAt: "desc" } }),
-  ]);
+  const client = await getClientProfile(id);
   if (!client) notFound();
   const whatsapp = client.whatsapp ? whatsappLink(client.whatsapp, `Olá, ${client.preferredName ?? client.fullName}.`) : null;
   const mayViewSensitive = can(staff.role, "SENSITIVE_CLIENT_VIEW");
@@ -35,7 +31,7 @@ export default async function ClientProfilePage({ params }: { params: Promise<{ 
       <article className="admin-card"><p className="eyebrow">Histórico de atendimentos</p>{client.appointments.length ? <ol className="timeline">{client.appointments.map((appointment) => <li key={appointment.id}><span><CalendarDays aria-hidden="true" size={15} /></span><div><strong>{appointment.service.name}</strong><p>{formatDate(appointment.startsAt, { day: "2-digit", month: "long", year: "numeric" })} · {formatTime(appointment.startsAt)} · {appointmentStatus(appointment.status)}</p></div></li>)}</ol> : <div className="empty-state"><p>Sem atendimentos registrados.</p><span>O histórico aparecerá após o primeiro agendamento.</span></div>}</article>
     </section>
     <details className="progressive-fields profile-extra"><summary>Informações de atendimento</summary>{mayViewSensitive ? <section className="editor-card sensitive-section"><div className="section-inline-heading"><div><p className="eyebrow">Informações importantes</p><h2>Relatos da cliente</h2></div><ShieldCheck aria-hidden="true" size={24} /></div>{healthUnavailable ? <p className="form-error" role="alert">Os dados protegidos não puderam ser abertos. Verifique a chave de criptografia antes de editar.</p> : <HealthProfileForm clientId={client.id} initial={health} />}</section> : <section className="admin-card restricted-data-note"><ShieldCheck aria-hidden="true" size={20} /><div><strong>Informações sensíveis protegidas</strong><p>Seu perfil não possui permissão para visualizar esses dados.</p></div></section>}
-    </details><details className="progressive-fields profile-extra"><summary>Termos e privacidade</summary><section className="profile-grid consent-grid"><article className="admin-card"><p className="eyebrow">Termos e consentimentos</p><ConsentForm clientId={client.id} documents={documents} />{client.consents.length ? <ol className="compact-history">{client.consents.map((consent) => <li key={consent.id}><FileCheck2 aria-hidden="true" size={15} /><span><strong>{consent.document.title} · v{consent.document.version}</strong><small>{consent.granted ? "Aceito" : "Não aceito"} em {formatDate(consent.grantedAt, { day: "2-digit", month: "short", year: "numeric" })}</small></span></li>)}</ol> : null}</article><article className="admin-card"><p className="eyebrow">Privacidade e LGPD</p><PrivacyRequestForm clientId={client.id} />{client.privacyRequests.length ? <ol className="compact-history">{client.privacyRequests.map((request) => <li key={request.id}><ShieldCheck aria-hidden="true" size={15} /><span><strong>{privacyType(request.type)}</strong><small>{privacyStatus(request.status)} · {formatDate(request.createdAt, { day: "2-digit", month: "short", year: "numeric" })}</small></span></li>)}</ol> : null}</article></section></details>
+    </details><details className="progressive-fields profile-extra"><summary>Privacidade</summary><section className="profile-grid consent-grid"><article className="admin-card"><p className="eyebrow">Privacidade e LGPD</p><PrivacyRequestForm clientId={client.id} />{client.privacyRequests.length ? <ol className="compact-history">{client.privacyRequests.map((request) => <li key={request.id}><ShieldCheck aria-hidden="true" size={15} /><span><strong>{privacyType(request.type)}</strong><small>{privacyStatus(request.status)} · {formatDate(request.createdAt, { day: "2-digit", month: "short", year: "numeric" })}</small></span></li>)}</ol> : null}</article></section></details>
   </main>;
 }
 

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { assertSameOrigin, requireOwner } from "@/lib/auth/session";
 import { getPrisma } from "@/lib/db/prisma";
 import { requireTenantContext } from "@/lib/tenancy/context";
+import { AGENDA_COLORS } from "@/lib/agenda/colors";
 
 export type SettingsFormState = { error?: string; success?: string };
 const optionalText = z.string().trim().max(4000).optional().transform((value) => value || null);
@@ -22,6 +23,7 @@ const settingsSchema = z.object({
 });
 const calendarGridSchema = z.object({
   calendarSlotInterval: z.enum(["5", "10", "15", "30"]).transform(Number),
+  primaryColor: z.string().refine((value) => AGENDA_COLORS.some((color) => color.value === value)),
 });
 
 export async function saveSettingsAction(_: SettingsFormState, formData: FormData): Promise<SettingsFormState> {
@@ -58,8 +60,8 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
     await prisma.$transaction([
       prisma.studioSettings.upsert({
         where: { organizationId: (await requireTenantContext()).organizationId },
-        create: { calendarSlotInterval: parsed.data.calendarSlotInterval },
-        update: { calendarSlotInterval: parsed.data.calendarSlotInterval },
+        create: parsed.data,
+        update: parsed.data,
       }),
       prisma.auditLog.create({
         data: {
@@ -72,8 +74,9 @@ export async function saveCalendarGridAction(_: SettingsFormState, formData: For
       }),
     ]);
     revalidatePath("/admin/agenda");
+    revalidatePath("/admin", "layout");
     revalidatePath("/admin/configuracoes/agenda");
-    return { success: "Intervalo da agenda atualizado." };
+    return { success: "Visual da agenda atualizado." };
   } catch {
     return { error: "Não foi possível atualizar a grade da agenda." };
   }
@@ -90,11 +93,12 @@ export async function saveHoursAction(_: SettingsFormState, formData: FormData):
     const lunchStart = String(formData.get(`lunch-start-${day}`) ?? ""); const lunchEnd = String(formData.get(`lunch-end-${day}`) ?? "");
     if (enabled && (!validTime(start) || !validTime(end) || minutes(start) >= minutes(end))) return { error: "Revise o horário de início e término dos dias selecionados." };
     if ((lunchStart || lunchEnd) && (!validTime(lunchStart) || !validTime(lunchEnd) || minutes(lunchStart) >= minutes(lunchEnd))) return { error: "Revise o intervalo de almoço." };
+    if (enabled && lunchStart && (minutes(lunchStart) < minutes(start) || minutes(lunchEnd) > minutes(end))) return { error: "O intervalo precisa estar dentro do expediente." };
     rules.push(prisma.availabilityRule.upsert({ where: { organizationId_resourceId_dayOfWeek: { organizationId, resourceId, dayOfWeek: day } }, create: { resourceId, dayOfWeek: day, startsAtMinute: enabled ? minutes(start) : 0, endsAtMinute: enabled ? minutes(end) : 0, lunchStartsAt: lunchStart ? minutes(lunchStart) : null, lunchEndsAt: lunchEnd ? minutes(lunchEnd) : null, isEnabled: enabled }, update: { startsAtMinute: enabled ? minutes(start) : 0, endsAtMinute: enabled ? minutes(end) : 0, lunchStartsAt: lunchStart ? minutes(lunchStart) : null, lunchEndsAt: lunchEnd ? minutes(lunchEnd) : null, isEnabled: enabled } }));
   }
   try {
     await prisma.$transaction([...rules, prisma.auditLog.create({ data: { userId: owner.id, action: "AVAILABILITY_UPDATED", entityType: "CalendarResource", entityId: resourceId } })]);
-    revalidatePath("/admin/agenda"); return { success: "Horários atualizados." };
+    revalidatePath("/admin/agenda"); revalidatePath("/admin/configuracoes/horarios"); return { success: "Horários atualizados." };
   } catch { return { error: "Não foi possível atualizar os horários." }; }
 }
 

@@ -37,7 +37,7 @@ export function timelineTickKind(minute: number) {
   return "slot";
 }
 
-/** Retorna o início visual da agenda sem manter horas vazias antes do próximo item. */
+/** Posição inicial da rolagem; não remove os horários anteriores da grade. */
 export function nextTimelineStart(defaultStart: number, spans: TimelineSpan[]) {
   const validSpans = spans.filter((span) => span.endsAtMinute > span.startsAtMinute);
   return validSpans.length ? Math.min(...validSpans.map((span) => span.startsAtMinute)) : defaultStart;

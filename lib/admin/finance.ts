@@ -32,7 +32,8 @@ export async function createExpense(input: { category: string; description: stri
   const organizationId = (await requireTenantContext()).organizationId;
   const prisma = getPrisma();
   return prisma.$transaction(async (tx) => {
-    const expense = await tx.expense.create({ data: { ...input, organizationId, status: "PAID" } });
+    const { actorUserId, ...data } = input;
+    const expense = await tx.expense.create({ data: { ...data, createdByUserId: actorUserId, organizationId, status: "PAID" } });
     await tx.auditLog.create({ data: { organizationId, userId: input.actorUserId, action: "EXPENSE_CREATED", entityType: "Expense", entityId: expense.id, after: { amountCents: expense.amountCents, category: expense.category } } });
     return expense;
   });
@@ -48,7 +49,8 @@ export async function createServicePackage(input: { clientId: string; serviceId:
   ]);
   if (!client || !service) throw new FinanceError("Cliente ou serviço não está disponível para o pacote.");
   return prisma.$transaction(async (tx) => {
-    const servicePackage = await tx.servicePackage.create({ data: { ...input, organizationId, remainingSessions: input.totalSessions } });
+    const { actorUserId, ...data } = input;
+    const servicePackage = await tx.servicePackage.create({ data: { ...data, createdByUserId: actorUserId, organizationId, remainingSessions: input.totalSessions } });
     await tx.auditLog.create({ data: { organizationId, userId: input.actorUserId, action: "SERVICE_PACKAGE_CREATED", entityType: "ServicePackage", entityId: servicePackage.id, after: { sessions: servicePackage.totalSessions } } });
     return servicePackage;
   });

@@ -2,6 +2,7 @@
 
 import { type ReactNode, useActionState, useState } from "react";
 import { Save } from "lucide-react";
+import { ClientPicker } from "@/components/admin/client-picker";
 import Link from "next/link";
 import { createAppointmentAction, type AppointmentFormState } from "./actions";
 
@@ -15,7 +16,7 @@ export function AppointmentForm({ date, minDate, time, selectedClientId, selecte
   return <form action={action} className="editor-form">
     <input name="requestKey" type="hidden" value={requestKey} />
     <div className="form-grid two-columns">
-      <FieldError error={state.fieldErrors?.clientId}><div className="field-label-row"><label htmlFor="clientId">Cliente</label><Link href="/admin/clientes/novo">Cadastrar nova</Link></div><select aria-invalid={Boolean(state.fieldErrors?.clientId)} defaultValue={clients.some((client) => client.id === selectedClientId) ? selectedClientId : ""} id="clientId" name="clientId" required><option disabled value="">Selecione uma cliente</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.preferredName ?? client.fullName}</option>)}</select></FieldError>
+      <FieldError error={state.fieldErrors?.clientId}><div className="field-label-row"><label htmlFor="clientId">Cliente</label><Link href="/admin/clientes/novo">Cadastrar nova</Link></div><ClientPicker clients={clients} selectedClientId={selectedClientId} /></FieldError>
       <FieldError error={state.fieldErrors?.serviceId}><label htmlFor="serviceId">Serviço</label><select aria-invalid={Boolean(state.fieldErrors?.serviceId)} defaultValue="" id="serviceId" name="serviceId" required><option disabled value="">Selecione um serviço</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name} · {service.durationMinutes} min</option>)}</select></FieldError>
       <FieldError error={state.fieldErrors?.date}><label htmlFor="date">Data</label><input aria-invalid={Boolean(state.fieldErrors?.date)} defaultValue={date} id="date" min={minDate} name="date" required type="date" /></FieldError>
       <FieldError error={state.fieldErrors?.time}><label htmlFor="time">Horário</label><input aria-invalid={Boolean(state.fieldErrors?.time)} defaultValue={time} id="time" name="time" required step="300" type="time" /></FieldError>

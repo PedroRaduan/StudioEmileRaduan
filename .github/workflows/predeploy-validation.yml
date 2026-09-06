@@ -1,0 +1,51 @@
+name: Pre-deploy validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  database-safety:
+    name: Tenant isolation and booking concurrency
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: agenda_validation
+          POSTGRES_PASSWORD: ci_disposable_only
+          POSTGRES_DB: agenda_validation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agenda_validation -d agenda_validation"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
+    env:
+      VALIDATION_ENV: ci
+      VALIDATION_DATABASE_URL: postgresql://agenda_validation:ci_disposable_only@127.0.0.1:5432/agenda_validation
+      VALIDATION_DB_ACK: dedicated-non-production-database
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run validate:predeploy
+      - name: Repeat on the same database to verify reproducibility
+        run: npm run validate:predeploy
+      - name: Upload validation reports (including failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: predeploy-validation
+          path: outputs/predeploy/*.json
+          retention-days: 14

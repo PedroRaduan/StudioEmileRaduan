@@ -1,0 +1,17 @@
+services:
+  postgres-validation:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: agenda_validation
+      POSTGRES_PASSWORD: validation_local_only
+      POSTGRES_DB: agenda_validation
+    ports:
+      - "127.0.0.1:54339:5432"
+    # Disposable database, separate from all application/dev volumes.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agenda_validation -d agenda_validation"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

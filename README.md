@@ -597,6 +597,7 @@ Veja [docs/integracoes-pendentes.md](docs/integracoes-pendentes.md).
 - [Checklist de LGPD](docs/checklist-lgpd.md)
 - [Design system](docs/design-system.md)
 - [Integrações pendentes](docs/integracoes-pendentes.md)
+- [Validação de pré-deploy/staging](docs/PREDEPLOY-VALIDATION.md) — banco descartável, isolamento multi-tenant e concorrência; `npm run validate:predeploy`.
 
 ## Referências oficiais
 
@@ -609,5 +610,7 @@ Veja [docs/integracoes-pendentes.md](docs/integracoes-pendentes.md).
 - [Prisma — Deploy no Vercel](https://docs.prisma.io/docs/orm/prisma-client/deployment/serverless/deploy-to-vercel)
 
 ## Observação jurídica
+
+Alterações de agenda, cores e estoque: [guia operacional e migration](docs/AGENDA-ESTOQUE.md).
 
 Textos legais, prazos de retenção, bases legais, termos de procedimento e políticas do studio precisam ser revisados por profissional qualificado antes do uso com dados reais.

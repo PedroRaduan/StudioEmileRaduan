@@ -16,6 +16,11 @@ describe("proteção de dados sensíveis", () => {
 
   it("rejeita conteúdo adulterado", () => {
     const encrypted = encryptSensitiveData(example);
-    expect(() => decryptSensitiveData(`${encrypted.slice(0, -1)}A`)).toThrow();
+    const parts = encrypted.split(".");
+    const ciphertext = Buffer.from(parts[3], "base64url");
+    // Always change a real byte; replacing the last base64 character can be a no-op.
+    ciphertext[0] ^= 1;
+    parts[3] = ciphertext.toString("base64url");
+    expect(() => decryptSensitiveData(parts.join("."))).toThrow();
   });
 });

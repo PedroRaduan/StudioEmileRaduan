@@ -1,5 +1,65 @@
 @import "tailwindcss";
 
+.welcome-tour.shop-tour { max-width: 920px; padding: 30px; }
+.shop-tour .tour-dots .active { background: var(--rose); }
+.shop-tour h2 { margin-top: 10px; }
+.shop-tour-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 26px; margin-top: 22px; }
+.tour-intro, .tour-workbench p, .tour-save-note { color: var(--ink-muted); font-size: .88rem; }
+.tour-save-note { margin-top: 20px; }
+.tour-workbench { min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+.tour-workbench input:not([type=radio]) { width: 100%; background: white; border: 1px solid var(--line); border-radius: 9px; padding: 12px; font: inherit; }
+.tour-color-field { border: 0; margin: 0; padding: 0; min-width: 0; }
+.tour-color-field legend { margin-bottom: 12px; font-weight: 600; }
+.shop-tour .agenda-color-options { gap: 8px; }
+.shop-tour .agenda-color-options label { font-size: .8rem; padding: 9px; }
+.tour-grid-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.tour-grid-options button { display: flex; justify-content: space-between; border: 1px solid var(--line); border-radius: 10px; padding: 15px; background: white; color: var(--ink); cursor: pointer; }
+.tour-grid-options button[aria-pressed=true] { background: var(--rose-soft); border-color: var(--rose); }
+.tour-live-preview { border: 1px solid var(--line); background: white; border-radius: 16px; overflow: hidden; min-width: 0; box-shadow: var(--shadow-card); }
+.tour-live-preview > header { display: flex; align-items: center; gap: 12px; padding: 18px; background: var(--rose-soft); }
+.tour-live-preview header > div { flex: 1; min-width: 0; }
+.tour-live-preview header strong, .tour-live-preview header small { display: block; overflow-wrap: anywhere; }
+.tour-live-preview header small { font-size: .68rem; color: var(--ink-muted); }
+.tour-monogram { background: var(--rose); color: white; width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center; flex-shrink: 0; }
+.tour-preview-day { padding: 14px; display: flex; justify-content: space-between; gap: 8px; font-size: .75rem; }
+.tour-preview-scroll { height: 245px; overflow: auto; overscroll-behavior: contain; padding: 0 12px; }
+.tour-preview-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; min-height: 38px; border-top: 1px solid var(--line); font-size: .72rem; }
+.tour-preview-row time { padding-top: 10px; color: var(--ink-muted); }
+.tour-preview-row > button { border: 0; background: transparent; text-align: left; padding: 9px; color: var(--rose); cursor: pointer; }
+.tour-preview-row > button:disabled { color: var(--ink-muted); cursor: default; }
+.tour-preview-row > button:not(:disabled):hover { background: var(--rose-soft); }
+.tour-demo-booking { border-left: 3px solid var(--rose); background: var(--rose-soft); padding: 10px; border-radius: 8px; }
+.tour-demo-booking strong, .tour-demo-booking small, .tour-demo-booking span { display: block; }
+.demo-completed { border-color: var(--success); }
+.tour-preview-continuation { background: var(--rose-soft); opacity: .55; }
+.tour-sim-result { padding: 14px; font-size: .75rem; background: var(--surface-muted); min-height: 65px; }
+.tour-sim-actions { display: grid; gap: 10px; }
+.shop-tour .tour-footer { flex-wrap: wrap; }
+.admin-mobile-bar > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .shop-tour-stage { animation: tour-stage-in 220ms ease-out both; }
+  .tour-live-preview > header, .tour-monogram, .tour-grid-options button { transition: background-color 200ms, border-color 200ms; }
+  .tour-demo-booking { animation: tour-stage-in 180ms ease-out both; }
+}
+@keyframes tour-stage-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 640px) {
+  .shop-tour-grid { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .welcome-tour.shop-tour { padding: 24px 16px 16px; }
+  .tour-preview-scroll { height: 180px; }
+  .shop-tour h2 { font-size: 1.5rem; }
+}
+
+.agenda-color-options { display: flex; flex-wrap: wrap; gap: 12px; }
+.agenda-color-options label { align-items: center; border: 1px solid var(--line); border-radius: 10px; display: flex; gap: 8px; padding: 12px; cursor: pointer; }
+.agenda-color-options label:has(input:checked) { outline: 2px solid var(--rose); }
+.agenda-color-options span { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; }
+.client-picker { display: grid; gap: 8px; min-width: 0; }
+.client-picker small { color: var(--ink-muted); }
+.stock-list { list-style: none; padding: 0; }
+.stock-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.stock-list strong { flex: 1; min-width: 120px; }
+.stock-list small { color: var(--warning); }
+
 :root {
   --canvas: #faf7f3;
   --surface: #ffffff;

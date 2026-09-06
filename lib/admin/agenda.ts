@@ -73,7 +73,7 @@ export async function getAgendaForRange(startDate: string, endDate: string) {
   return { appointments, blocks };
 }
 
-export async function getAppointmentFormData() {
+export async function getAppointmentFormData(selectedClientId?: string) {
   await requirePermission("APPOINTMENTS_MANAGE");
   const { organizationId } = await requireTenantContext();
   const prisma = getPrisma();
@@ -83,6 +83,10 @@ export async function getAppointmentFormData() {
     prisma.calendarResource.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { createdAt: "asc" } }),
     prisma.studioSettings.findUnique({ where: { organizationId }, select: { timezone: true } }),
   ]);
+  if (selectedClientId && selectedClientId.length <= 40 && !clients.some((client) => client.id === selectedClientId)) {
+    const selected = await prisma.client.findFirst({ where: { id: selectedClientId, deletedAt: null, status: { not: "BLOCKED" } }, select: { id: true, fullName: true, preferredName: true } });
+    if (selected) clients.unshift(selected);
+  }
   return { clients, services, resources, timezone: settings?.timezone };
 }
 

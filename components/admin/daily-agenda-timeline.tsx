@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { CalendarPlus, CheckCheck, Circle, CircleCheckBig, Clock3, LockKeyhole, UserRoundX, X } from "lucide-react";
 import type { getAgendaForDay } from "@/lib/admin/agenda";
-import { dateKeyInTimezone, formatDate, formatTime, todayInTimezone } from "@/lib/date-time";
+import { dateKeyInTimezone, formatDate, formatTime } from "@/lib/date-time";
 import {
   calendarSlotInterval,
   minuteOfDayInTimezone,
   timeFromMinute,
-  timelineBounds,
   nextTimelineStart,
   timelinePixelsPerMinute,
   timelinePlacement,
@@ -14,6 +13,7 @@ import {
   timelineTickKind,
 } from "@/lib/agenda/timeline";
 import { CurrentTimeLine } from "./current-time-line";
+import { TimelineViewport } from "./timeline-viewport";
 
 type DailyAgendaData = Awaited<ReturnType<typeof getAgendaForDay>>;
 type Resource = NonNullable<DailyAgendaData["resource"]>;
@@ -43,15 +43,8 @@ export function DailyAgendaTimeline({ data, date }: { data: DailyAgendaData; dat
       blockSpans: blocks.map((block) => spanForDate(block.startsAt, block.endsAt, date, timezone)),
     };
   });
-  const starts = views.map((view) => view.workingWindow.start);
-  const ends = views.map((view) => view.workingWindow.end);
-  const spans = views.flatMap((view) => [...view.appointmentSpans, ...view.blockSpans]);
-  const currentMinute = date === todayInTimezone(timezone) ? minuteOfDayInTimezone(new Date(), timezone) : null;
-  const relevantSpans = currentMinute === null ? spans : spans.filter((span) => span.endsAtMinute > currentMinute);
-  const nextCommitmentStart = relevantSpans.length ? Math.min(...relevantSpans.map((span) => span.startsAtMinute)) : null;
-  const defaultStart = starts.length ? Math.min(...starts) : 8 * 60;
-  const focusedStart = nextCommitmentStart === null ? defaultStart : nextTimelineStart(defaultStart, relevantSpans);
-  const bounds = timelineBounds(focusedStart, ends.length ? Math.max(...ends) : 20 * 60, relevantSpans, interval);
+  const initialMinute = nextTimelineStart(minuteOfDayInTimezone(new Date(), timezone), views.flatMap((view) => view.appointmentSpans));
+  const bounds = { startsAtMinute: 0, endsAtMinute: 24 * 60 };
   const pixelsPerMinute = timelinePixelsPerMinute(interval);
   const height = (bounds.endsAtMinute - bounds.startsAtMinute) * pixelsPerMinute;
   const slots = timelineSlots(bounds.startsAtMinute, bounds.endsAtMinute, interval);
@@ -61,11 +54,11 @@ export function DailyAgendaTimeline({ data, date }: { data: DailyAgendaData; dat
     <section aria-label={`Agenda de ${formatDate(new Date(`${date}T12:00:00Z`), { day: "numeric", month: "long", timeZone: "UTC" })}`} className="day-agenda">
       <header className="day-agenda-summary"><div><Clock3 aria-hidden="true" size={18} /><span><strong>{liveCount}</strong> {liveCount === 1 ? "atendimento" : "atendimentos"}</span></div><span>Grade de {interval} minutos</span></header>
       {!views.length ? <div className="timeline-notice" role="note"><span>A agenda ainda não tem profissionais ou recursos ativos.</span><Link href="/admin/configuracoes/horarios">Configurar agenda</Link></div> : null}
-      <div className="timeline-board" data-timeline-board>
+      <TimelineViewport initialMinute={initialMinute} key={date} pixelsPerMinute={pixelsPerMinute}>
         <div className={`timeline-resources timeline-resources-${Math.min(views.length, 4)}`}>
           {views.map((view) => <ResourceTimeline bounds={bounds} date={date} height={height} interval={interval} key={view.resource.id} pixelsPerMinute={pixelsPerMinute} slots={slots} timezone={timezone} view={view} />)}
         </div>
-      </div>
+      </TimelineViewport>
       {!liveCount && views.length ? <div className="timeline-empty-hint"><CalendarPlus aria-hidden="true" size={17} /><span>Dia livre. Toque em qualquer horário para agendar.</span></div> : null}
     </section>
   );
@@ -102,17 +95,17 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
       {visibleBlocks.map((block) => {
         const span = spanForDate(block.startsAt, block.endsAt, date, timezone);
         const placement = timelinePlacement(span.startsAtMinute, span.endsAtMinute, bounds.startsAtMinute, pixelsPerMinute);
-        return <div className="timeline-block" key={block.id} style={{ height: placement.height, top: placement.top }}><LockKeyhole aria-hidden="true" size={14} /><strong>{block.title}</strong><span>{formatTime(block.startsAt)}–{formatTime(block.endsAt)}</span></div>;
+        return <div className="timeline-block" key={block.id} style={{ height: placement.height, top: placement.top }}><LockKeyhole aria-hidden="true" size={14} /><strong>{block.title}</strong><span>{formatTime(block.startsAt, timezone)}–{formatTime(block.endsAt, timezone)}</span></div>;
       })}
       {liveAppointments.map((appointment) => {
         const span = spanForDate(appointment.startsAt, appointment.endsAt, date, timezone);
         const placement = timelinePlacement(span.startsAtMinute, span.endsAtMinute, bounds.startsAtMinute, pixelsPerMinute);
         const compact = appointment.durationMinutes <= 30;
-        return <Link aria-label={`${appointment.client.preferredName ?? appointment.client.fullName}, ${formatTime(appointment.startsAt)} às ${formatTime(appointment.endsAt)}, ${statusLabel(appointment.status)}`} className={`timeline-appointment status-${appointment.status.toLowerCase()}${compact ? " is-compact" : ""}`} href={`/admin/agendamentos/${appointment.id}`} key={appointment.id} style={{ borderLeftColor: appointment.service.calendarColor, height: placement.height, top: placement.top }}><div className="timeline-appointment-main"><time>{formatTime(appointment.startsAt)}–{formatTime(appointment.endsAt)}</time><strong>{appointment.client.preferredName ?? appointment.client.fullName}</strong><span>{appointment.service.name} · {appointment.durationMinutes} min</span></div><span className="timeline-status">{statusIcon(appointment.status)}{statusLabel(appointment.status)}</span></Link>;
+        return <Link aria-label={`${appointment.client.preferredName ?? appointment.client.fullName}, ${formatTime(appointment.startsAt, timezone)} às ${formatTime(appointment.endsAt, timezone)}, ${statusLabel(appointment.status)}`} className={`timeline-appointment status-${appointment.status.toLowerCase()}${compact ? " is-compact" : ""}`} href={`/admin/agendamentos/${appointment.id}`} key={appointment.id} style={{ borderLeftColor: appointment.service.calendarColor, height: placement.height, top: placement.top }}><div className="timeline-appointment-main"><time>{formatTime(appointment.startsAt, timezone)}–{formatTime(appointment.endsAt, timezone)}</time><strong>{appointment.client.preferredName ?? appointment.client.fullName}</strong><span>{appointment.service.name} · {appointment.durationMinutes} min</span></div><span className="timeline-status">{statusIcon(appointment.status)}{statusLabel(appointment.status)}</span></Link>;
       })}
       <CurrentTimeLine date={date} gridEndMinute={bounds.endsAtMinute} gridStartMinute={bounds.startsAtMinute} pixelsPerMinute={pixelsPerMinute} timezone={timezone} />
     </div>
-    {canceledAppointments.length ? <div className="canceled-appointments"><strong>Cancelados</strong>{canceledAppointments.map((appointment) => <Link href={`/admin/agendamentos/${appointment.id}`} key={appointment.id}><X aria-hidden="true" size={14} />{formatTime(appointment.startsAt)} · {appointment.client.preferredName ?? appointment.client.fullName}</Link>)}</div> : null}
+    {canceledAppointments.length ? <div className="canceled-appointments"><strong>Cancelados</strong>{canceledAppointments.map((appointment) => <Link href={`/admin/agendamentos/${appointment.id}`} key={appointment.id}><X aria-hidden="true" size={14} />{formatTime(appointment.startsAt, timezone)} · {appointment.client.preferredName ?? appointment.client.fullName}</Link>)}</div> : null}
   </article>;
 }
 

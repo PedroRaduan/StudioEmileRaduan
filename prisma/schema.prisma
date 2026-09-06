@@ -837,6 +837,34 @@ model WaitlistOffer {
   @@index([organizationId, waitlistEntryId, createdAt])
 }
 
+model InventoryItem {
+  id             String @id @default(cuid())
+  organizationId String
+  name           String
+  quantity       Int @default(0)
+  minimum        Int @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, name])
+  @@unique([id, organizationId])
+}
+
+model InventoryMovement {
+  id              String @id @default(cuid())
+  organizationId  String
+  itemId          String
+  kind            String
+  quantity        Int
+  totalCostCents  Int @default(0)
+  expenseId       String? @unique
+  requestKey      String
+  createdAt       DateTime @default(now())
+
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, createdAt])
+}
+
 model Expense {
   id              String        @id @default(cuid())
   organizationId  String?
@@ -853,6 +881,7 @@ model Expense {
   updatedAt       DateTime      @updatedAt
   deletedAt       DateTime?
 
+  @@unique([id, organizationId])
   @@index([organizationId, occurredAt])
   @@index([organizationId, status, occurredAt])
 }

@@ -58,8 +58,8 @@ export function formatDate(value: Date, options: Intl.DateTimeFormatOptions = {}
   return new Intl.DateTimeFormat("pt-BR", formatterOptions).format(value);
 }
 
-export function formatTime(value: Date) {
-  return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: DEFAULT_TIMEZONE }).format(value);
+export function formatTime(value: Date, timezone = DEFAULT_TIMEZONE) {
+  return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: timezone }).format(value);
 }
 
 export function todayInTimezone(timezone = DEFAULT_TIMEZONE) {

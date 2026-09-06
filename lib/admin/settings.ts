@@ -14,7 +14,7 @@ export async function getCalendarSettings() {
   const { organizationId } = await requireTenantContext();
   return getPrisma().studioSettings.findUnique({
     where: { organizationId },
-    select: { calendarSlotInterval: true },
+    select: { calendarSlotInterval: true, primaryColor: true },
   });
 }
 

@@ -6,7 +6,7 @@ import { enforcePostgresCertificateVerification } from "./lib/db/postgres-url";
 // O Next.js usa .env.local no desenvolvimento, mas a CLI do Prisma não o
 // carrega automaticamente. Variáveis já definidas pelo ambiente de produção
 // continuam tendo prioridade sobre os arquivos locais.
-for (const envFile of [".env.local", ".env"]) {
+for (const envFile of process.env.PREDEPLOY_VALIDATION === "1" ? [] : [".env.local", ".env"]) {
   if (existsSync(envFile)) loadEnvFile(envFile);
 }
 

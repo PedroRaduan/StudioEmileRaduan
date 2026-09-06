@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const agendaPage = readFileSync(new URL("../app/admin/(private)/agenda/page.tsx", import.meta.url), "utf8");
 const timeline = readFileSync(new URL("../components/admin/daily-agenda-timeline.tsx", import.meta.url), "utf8");
 const currentTime = readFileSync(new URL("../components/admin/current-time-line.tsx", import.meta.url), "utf8");
+const viewport = readFileSync(new URL("../components/admin/timeline-viewport.tsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
 
 describe("experiência de uso da agenda", () => {
@@ -15,8 +16,8 @@ describe("experiência de uso da agenda", () => {
   });
 
   it("rola somente a área da timeline para posicionar o horário atual", () => {
-    expect(currentTime).toContain('closest<HTMLElement>("[data-timeline-board]")');
-    expect(currentTime).toContain("scrollRegion.scrollTo");
+    expect(viewport).toContain("board.current?.scrollTo");
+    expect(currentTime).not.toContain("scrollTo");
     expect(currentTime).not.toContain("scrollIntoView");
   });
 

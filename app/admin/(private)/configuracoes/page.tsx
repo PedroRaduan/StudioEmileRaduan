@@ -1,14 +1,13 @@
 import Link from "next/link";
-import { CalendarClock, CalendarOff, CalendarRange, ChevronRight, Download, FileText, KeyRound, MessageCircle, Users } from "lucide-react";
+import { CalendarClock, CalendarOff, CalendarRange, ChevronRight, Download, KeyRound, Users } from "lucide-react";
 import { requirePermission } from "@/lib/auth/session";
 
 const areas = [
+  { href: "/admin/configuracoes/tutorial", icon: CalendarRange, title: "Personalizar com o tutorial", description: "Experimente cores, ajuste sua agenda e simule um dia de atendimento." },
   { href: "/admin/configuracoes/acesso", icon: KeyRound, title: "Acesso administrativo", description: "Cuide da segurança da sua conta." },
   { href: "/admin/configuracoes/horarios", icon: CalendarClock, title: "Horários semanais", description: "Defina expediente e intervalos recorrentes." },
   { href: "/admin/configuracoes/agenda", icon: CalendarRange, title: "Visual da agenda", description: "Escolha o intervalo de referência da grade diária." },
   { href: "/admin/configuracoes/bloqueios", icon: CalendarOff, title: "Bloqueios e exceções", description: "Folgas, datas fechadas e horários especiais." },
-  { href: "/admin/configuracoes/mensagens", icon: MessageCircle, title: "Modelos de mensagens", description: "Textos usados na preparação manual de lembretes." },
-  { href: "/admin/configuracoes/termos", icon: FileText, title: "Termos e consentimentos", description: "Organize os documentos usados nos atendimentos." },
   { href: "/admin/configuracoes/equipe", icon: Users, title: "Equipe e permissões", description: "Crie acessos restritos para recepcionistas." },
   { href: "/admin/configuracoes/instalar-app", icon: Download, title: "Instalar aplicativo", description: "Use a agenda como app no celular ou computador." },
 ];

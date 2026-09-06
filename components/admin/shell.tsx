@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BarChart3, CalendarDays, CalendarPlus, ChartNoAxesCombined, ClipboardList, LogOut, Menu, Settings, Users, WalletCards, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { agendaColor } from "@/lib/agenda/colors";
 import { logoutAction } from "@/app/admin/(private)/actions";
 import { can, type Permission, type StaffRole } from "@/lib/auth/permissions";
 import { STUDIO_BRAND } from "@/lib/studio-config";
@@ -27,7 +28,8 @@ const links: NavigationItem[] = [
   { href: "/admin/configuracoes", label: "Configurações", icon: Settings, permission: "SETTINGS_MANAGE" },
 ];
 
-export function AdminShell({ children, staffName, staffRole }: { children: React.ReactNode; staffName: string; staffRole: StaffRole }) {
+export function AdminShell({ children, staffName, staffRole, primaryColor, studioName }: { children: React.ReactNode; staffName: string; staffRole: StaffRole; primaryColor?: string; studioName?: string }) {
+  const color = agendaColor(primaryColor);
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [mobileNavigation, setMobileNavigation] = useState(false);
@@ -70,9 +72,9 @@ export function AdminShell({ children, staffName, staffRole }: { children: React
   }, [mobileNavigation, open]);
 
   return (
-    <div className="admin-shell">
+    <div className="admin-shell" style={{ "--rose": color.value, "--rose-dark": color.value === "#9A5B67" ? "#77434D" : color.value, "--rose-soft": color.soft } as CSSProperties}>
       <aside ref={sidebarRef} className={`admin-sidebar ${open ? "is-open" : ""}`} aria-hidden={mobileNavigation && !open ? true : undefined} aria-label="Navegação administrativa" id="admin-primary-navigation" inert={mobileNavigation && !open ? true : undefined}>
-        <div className="admin-brand"><span>{STUDIO_BRAND.wordmarkPrimary}</span><small>{STUDIO_BRAND.wordmarkSecondary}</small></div>
+        <div className="admin-brand"><span>{studioName || STUDIO_BRAND.wordmarkPrimary}</span><small>Sua agenda</small></div>
         <nav className="admin-nav">
           {visibleLinks.map(({ href, label, icon: Icon, exact }) => {
             const active = isNavigationActive(pathname, href, exact);
@@ -88,7 +90,7 @@ export function AdminShell({ children, staffName, staffRole }: { children: React
       <section className="admin-content">
         <header className="admin-mobile-bar">
           <button ref={menuButtonRef} aria-controls="admin-primary-navigation" aria-expanded={open} aria-label={open ? "Fechar menu" : "Abrir menu"} onClick={() => setOpen((value) => !value)} type="button">{open ? <X aria-hidden="true" size={21} /> : <Menu aria-hidden="true" size={21} />}</button>
-          <span>{STUDIO_BRAND.wordmarkPrimary}</span>
+          <span>{studioName || STUDIO_BRAND.wordmarkPrimary}</span>
           <Link aria-label="Criar agendamento" href="/admin/agendamentos/novo"><CalendarPlus aria-hidden="true" size={21} /></Link>
         </header>
         {children}

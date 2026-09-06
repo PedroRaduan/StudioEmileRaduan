@@ -9,7 +9,7 @@ type TenantQueryArgs = Record<string, unknown> & {
 };
 
 type UnscopedModelDelegate = {
-  findFirst(args: { where: Record<string, unknown>; select: { id: true } }): Promise<{ id: string } | null>;
+  findUnique(args: { where: Record<string, unknown>; select: { id: true } }): Promise<{ id: string } | null>;
 };
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -25,6 +25,7 @@ const tenantModels = new Set([
   "AvailabilityException", "ScheduleBlock", "Holiday", "Payment", "PaymentEvent", "MessageTemplate",
   "MessageLog", "Document", "Consent", "PrivacyRequest", "AuditLog", "WaitlistEntry", "WaitlistOffer",
   "Expense", "DailyCashClose", "ServicePackage", "PackageRedemption", "CommissionRule", "CommissionEntry",
+  "InventoryItem", "InventoryMovement",
 ]);
 
 function createPrismaClient() {
@@ -115,7 +116,10 @@ async function tenantRecordExists(client: PrismaClient, model: string, where: Re
   if (!where) return null;
   const delegate = (client as unknown as Record<string, UnscopedModelDelegate>)[modelDelegateName(model)];
   if (!delegate) throw new Error(`Modelo tenantizado desconhecido: ${model}`);
-  return delegate.findFirst({ where: organizationId ? scopeWhere(where, organizationId) : where, select: { id: true } });
+  // Keep compound unique selectors at the top level. findFirst does not accept
+  // them (notably the organization/resource/weekday key used by weekly hours).
+  const existingAnd = Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : [];
+  return delegate.findUnique({ where: organizationId ? { ...where, AND: [...existingAnd, { organizationId }] } : where, select: { id: true } });
 }
 
 class TenantAccessDeniedError extends Error {
