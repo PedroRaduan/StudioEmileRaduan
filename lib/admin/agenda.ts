@@ -13,7 +13,7 @@ export async function getAgendaForDay(date: string) {
   const databaseDate = new Date(`${date}T12:00:00.000Z`);
   const [appointments, blocks, resources, holiday] = await Promise.all([
     prisma.appointment.findMany({
-      where: { startsAt: { gte: range.start, lt: range.end } },
+      where: { startsAt: { lt: range.end }, endsAt: { gt: range.start } },
       select: {
         id: true, startsAt: true, endsAt: true, durationMinutes: true, status: true, resourceId: true,
         client: { select: { id: true, fullName: true, preferredName: true } },
@@ -27,9 +27,13 @@ export async function getAgendaForDay(date: string) {
       orderBy: { startsAt: "asc" },
     }),
     prisma.calendarResource.findMany({
-      where: { isActive: true },
+      where: { OR: [
+        { isActive: true },
+        { appointments: { some: { organizationId, startsAt: { lt: range.end }, endsAt: { gt: range.start } } } },
+        { blocks: { some: { organizationId, startsAt: { lt: range.end }, endsAt: { gt: range.start } } } },
+      ] },
       select: {
-        id: true, name: true,
+        id: true, name: true, isActive: true,
         availabilityRules: { select: { dayOfWeek: true, startsAtMinute: true, endsAtMinute: true, isEnabled: true } },
         availabilityExceptions: { where: { date: databaseDate }, select: { startsAtMinute: true, endsAtMinute: true, isClosed: true, note: true }, take: 1 },
       },

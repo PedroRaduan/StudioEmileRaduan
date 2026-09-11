@@ -4,14 +4,15 @@ import { AgendaDatePicker } from "@/components/admin/agenda-date-picker";
 import { DailyAgendaTimeline } from "@/components/admin/daily-agenda-timeline";
 import { getAgendaForDay, getAgendaForRange, getAgendaTimezone } from "@/lib/admin/agenda";
 import { dateKeyInTimezone, formatDate, formatTime, todayInTimezone } from "@/lib/date-time";
-import { isAgendaDate, shiftAgendaDate } from "@/lib/agenda/navigation";
+import { isAgendaDate, shiftAgendaDate, agendaDateRange as dateRange, type AgendaView } from "@/lib/agenda/navigation";
 
-type View = "day" | "week" | "month" | "list";
+type View = AgendaView;
 const views: Array<{ value: View; label: string }> = [
   { value: "day", label: "Dia" },
   { value: "week", label: "Semana" },
   { value: "month", label: "Mês" },
   { value: "list", label: "Lista" },
+  { value: "history", label: "Histórico" },
 ];
 
 export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ date?: string; view?: string; saved?: string; availabilityWarning?: string }> }) {
@@ -45,6 +46,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           <Link className="today-link" href={`/admin/agenda?date=${todayInTimezone(timezone)}&view=${view}`}>Hoje</Link>
         </div>
       </div>
+      {view === "history" ? <p className="agenda-history-note">Histórico de 30 dias até a data escolhida, incluindo concluídos e cancelados. Use a seta à esquerda para ver os 30 dias anteriores.</p> : null}
       {dailyAgenda ? <DailyAgendaTimeline data={dailyAgenda} date={date} /> : groups.length ? (
         <div className="agenda-groups">
           {groups.map((group) => {
@@ -85,22 +87,6 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       )}
     </main>
   );
-}
-
-function dateRange(date: string, view: View) {
-  const base = new Date(`${date}T12:00:00Z`);
-  if (view === "day") return { start: date, end: date };
-  if (view === "month") {
-    const start = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1, 12));
-    const end = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth() + 1, 0, 12));
-    return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
-  }
-  const start = new Date(base);
-  const weekday = start.getUTCDay();
-  start.setUTCDate(start.getUTCDate() - ((weekday + 6) % 7));
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + (view === "list" ? 29 : 6));
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 
 function periodTitle(date: string, view: View) {

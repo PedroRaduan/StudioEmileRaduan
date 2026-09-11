@@ -11,6 +11,7 @@ export default async function AdminDashboardPage() {
       <div><p className="eyebrow">Sua rotina, organizada</p><h1>{data.greeting}.</h1><p>{formatDate(new Date(), { weekday: "long", day: "numeric", month: "long", timeZone: data.timezone })}</p></div>
       <Link className="button button-primary" href={`/admin/agendamentos/novo?date=${data.today}`}><CalendarPlus size={18} /> Novo agendamento</Link>
     </div>
+    <Link className="back-link" href={`/admin/agenda?date=${data.today}&view=history`}>Consultar agendamentos anteriores <ArrowUpRight size={16} /></Link>
     <section className="dashboard-metrics simple-metrics" aria-label="Resumo de hoje">
       <article><CalendarDays size={20} aria-hidden="true" /><strong>{data.todayAppointments.length}</strong><span>atendimentos hoje</span></article>
       <article><Check size={20} aria-hidden="true" /><strong>{data.completedToday}</strong><span>concluídos</span></article>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CalendarPlus, CheckCheck, Circle, CircleCheckBig, Clock3, LockKeyhole, UserRoundX, X } from "lucide-react";
 import type { getAgendaForDay } from "@/lib/admin/agenda";
-import { dateKeyInTimezone, formatDate, formatTime } from "@/lib/date-time";
+import { dateKeyInTimezone, formatDate, formatTime, todayInTimezone } from "@/lib/date-time";
 import {
   calendarSlotInterval,
   minuteOfDayInTimezone,
@@ -49,10 +49,12 @@ export function DailyAgendaTimeline({ data, date }: { data: DailyAgendaData; dat
   const height = (bounds.endsAtMinute - bounds.startsAtMinute) * pixelsPerMinute;
   const slots = timelineSlots(bounds.startsAtMinute, bounds.endsAtMinute, interval);
   const liveCount = data.appointments.filter((appointment) => appointment.status !== "CANCELED").length;
+  const canceled = data.appointments.filter((appointment) => appointment.status === "CANCELED");
 
   return (
     <section aria-label={`Agenda de ${formatDate(new Date(`${date}T12:00:00Z`), { day: "numeric", month: "long", timeZone: "UTC" })}`} className="day-agenda">
       <header className="day-agenda-summary"><div><Clock3 aria-hidden="true" size={18} /><span><strong>{liveCount}</strong> {liveCount === 1 ? "atendimento" : "atendimentos"}</span></div><span>Grade de {interval} minutos</span></header>
+      {canceled.length ? <details className="canceled-appointments"><summary>{canceled.length} {canceled.length === 1 ? "atendimento cancelado" : "atendimentos cancelados"}</summary>{canceled.map((appointment) => <Link href={`/admin/agendamentos/${appointment.id}`} key={appointment.id}><X size={14} aria-hidden="true" />{formatTime(appointment.startsAt, timezone)} · {appointment.client.preferredName ?? appointment.client.fullName}</Link>)}</details> : null}
       {!views.length ? <div className="timeline-notice" role="note"><span>A agenda ainda não tem profissionais ou recursos ativos.</span><Link href="/admin/configuracoes/horarios">Configurar agenda</Link></div> : null}
       <TimelineViewport initialMinute={initialMinute} key={date} pixelsPerMinute={pixelsPerMinute}>
         <div className={`timeline-resources timeline-resources-${Math.min(views.length, 4)}`}>
@@ -75,9 +77,9 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
   view: ResourceView;
 }) {
   const liveAppointments = view.appointments.filter((appointment) => appointment.status !== "CANCELED" && spanForDate(appointment.startsAt, appointment.endsAt, date, timezone).endsAtMinute > bounds.startsAtMinute);
-  const canceledAppointments = view.appointments.filter((appointment) => appointment.status === "CANCELED");
   const visibleBlocks = view.blocks.filter((block) => spanForDate(block.startsAt, block.endsAt, date, timezone).endsAtMinute > bounds.startsAtMinute);
-  const resourceSummary = view.workingWindow.notice ?? "Disponível neste período";
+  const resourceSummary = !view.resource.isActive ? "Agenda desativada · histórico preservado" : view.workingWindow.notice ?? "Disponível neste período";
+  const canCreate = view.resource.isActive && date >= todayInTimezone(timezone);
   return <article className="timeline-resource">
     <header>
       <div className="timeline-resource-title"><strong>{view.resource.name}</strong><span title={view.workingWindow.notice ?? undefined}>{resourceSummary}</span></div>
@@ -90,7 +92,7 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
         const tickKind = timelineTickKind(minute);
         const occupied = [...view.appointmentSpans, ...view.blockSpans].some((span) => span.startsAtMinute < minute + interval && span.endsAtMinute > minute);
         const className = `timeline-slot tick-${tickKind}${occupied ? " is-occupied" : ""}`;
-        return occupied ? <div aria-hidden="true" className={className} key={minute} style={{ height: placement.height, top: placement.top }}><time>{tickKind === "hour" ? time : ""}</time><span /></div> : <Link aria-label={`Criar agendamento na agenda ${view.resource.name} às ${time}`} className={className} href={`/admin/agendamentos/novo?date=${date}&time=${time}&resourceId=${view.resource.id}`} key={minute} style={{ height: placement.height, top: placement.top }}><time dateTime={time}>{tickKind === "hour" ? time : <span className="sr-only">{time}</span>}</time><span aria-hidden="true" /></Link>;
+        return occupied || !canCreate ? <div aria-hidden="true" className={className} key={minute} style={{ height: placement.height, top: placement.top }}><time>{tickKind === "hour" ? time : ""}</time><span /></div> : <Link aria-label={`Criar agendamento na agenda ${view.resource.name} às ${time}`} className={className} href={`/admin/agendamentos/novo?date=${date}&time=${time}&resourceId=${view.resource.id}`} key={minute} style={{ height: placement.height, top: placement.top }}><time dateTime={time}>{tickKind === "hour" ? time : <span className="sr-only">{time}</span>}</time><span aria-hidden="true" /></Link>;
       })}
       {visibleBlocks.map((block) => {
         const span = spanForDate(block.startsAt, block.endsAt, date, timezone);
@@ -105,7 +107,6 @@ function ResourceTimeline({ bounds, date, height, interval, pixelsPerMinute, slo
       })}
       <CurrentTimeLine date={date} gridEndMinute={bounds.endsAtMinute} gridStartMinute={bounds.startsAtMinute} pixelsPerMinute={pixelsPerMinute} timezone={timezone} />
     </div>
-    {canceledAppointments.length ? <div className="canceled-appointments"><strong>Cancelados</strong>{canceledAppointments.map((appointment) => <Link href={`/admin/agendamentos/${appointment.id}`} key={appointment.id}><X aria-hidden="true" size={14} />{formatTime(appointment.startsAt, timezone)} · {appointment.client.preferredName ?? appointment.client.fullName}</Link>)}</div> : null}
   </article>;
 }
 

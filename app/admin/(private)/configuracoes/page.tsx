@@ -3,7 +3,7 @@ import { CalendarClock, CalendarOff, CalendarRange, ChevronRight, Download, KeyR
 import { requirePermission } from "@/lib/auth/session";
 
 const areas = [
-  { href: "/admin/configuracoes/tutorial", icon: CalendarRange, title: "Personalizar com o tutorial", description: "Experimente cores, ajuste sua agenda e simule um dia de atendimento." },
+  { href: "/admin/configuracoes/tutorial", icon: CalendarRange, title: "Guia rápido", description: "Veja como agendar, consultar o histórico e ajustar a agenda." },
   { href: "/admin/configuracoes/acesso", icon: KeyRound, title: "Acesso administrativo", description: "Cuide da segurança da sua conta." },
   { href: "/admin/configuracoes/horarios", icon: CalendarClock, title: "Horários semanais", description: "Defina expediente e intervalos recorrentes." },
   { href: "/admin/configuracoes/agenda", icon: CalendarRange, title: "Visual da agenda", description: "Escolha o intervalo de referência da grade diária." },

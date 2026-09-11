@@ -32,5 +32,5 @@ export default async function PrivateAdminLayout({ children }: Readonly<{ childr
   const tourSeen = await hasSeenAdminTour();
   const { organizationId } = await requireTenantContext();
   const settings = await getPrisma().studioSettings.findUnique({ where: { organizationId }, select: { primaryColor: true, studioName: true, calendarSlotInterval: true } });
-  return <PwaInstallProvider><AdminShell studioName={settings?.studioName} primaryColor={settings?.primaryColor} staffName={staff.name} staffRole={staff.role}>{children}<FirstVisitTour initiallySeen={tourSeen} studioName={settings?.studioName} primaryColor={settings?.primaryColor} interval={settings?.calendarSlotInterval} mayCustomize={staff.role === "OWNER"} />{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell></PwaInstallProvider>;
+  return <PwaInstallProvider><AdminShell studioName={settings?.studioName} primaryColor={settings?.primaryColor} staffName={staff.name} staffRole={staff.role}>{children}<FirstVisitTour initiallySeen={tourSeen} />{pwaEnabled ? <><PwaRegister /><PwaInstallPrompt /></> : null}</AdminShell></PwaInstallProvider>;
 }
